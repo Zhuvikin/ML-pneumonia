@@ -21,12 +21,23 @@ from matplotlib import pyplot as plt
 from matplotlib import patches
 from math import ceil, floor
 from pascal_voc_writer import Writer
+import shutil
 
 cv2.__version__
-# -
 
+# +
 base_data_dir = '../data/chest_xray/'
-data_dir = base_data_dir + 'prepeared/'
+
+data_dir = base_data_dir + 'prepared/'
+recognition_dir = base_data_dir + 'recognition/'
+recognition_images_dir = recognition_dir + 'images/'
+recognition_annotations_dir = recognition_dir + 'annotations/'
+
+for directory in [data_dir, recognition_images_dir, recognition_annotations_dir]:
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
 # +
 bddl = len(base_data_dir)
@@ -128,7 +139,7 @@ for example in examples:
     img = cv2.imread(img_path, 0)
     writer = Writer(img_path, img.shape[0], img.shape[1], depth = 1)
     writer.addObject('ROI', ROI[0], ROI[1], ROI[2], ROI[3])
-    writer.save('img_' + str(i) + '.xml')
+    writer.save(os.path.basename(img_path)[:-5] + '.xml')
 
     ax = plt.subplot(3, 6, i)
     plt.axis('off')
@@ -139,6 +150,12 @@ for example in examples:
     i += 1
 
 plt.show()
+
+# +
+test_size = 0.3
+
+train_set = example_images[0:floor(len(example_images) * (1 - test_size))]
+test_set = example_images[-ceil(len(example_images) * test_size):]
 
 # +
 # h_crop = 0.3
