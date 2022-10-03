@@ -84,3 +84,5 @@ misc.xml
 modules.xml
 pneumonia.iml
 vcs.xml
+*.h5
+*.xml

@@ -22,6 +22,7 @@ from matplotlib import patches
 from math import ceil, floor
 from pascal_voc_writer import Writer
 import shutil
+from urllib import request
 
 cv2.__version__
 
@@ -30,14 +31,23 @@ base_data_dir = '../data/chest_xray/'
 
 data_dir = base_data_dir + 'prepared/'
 recognition_dir = base_data_dir + 'recognition/'
-recognition_images_dir = recognition_dir + 'images/'
-recognition_annotations_dir = recognition_dir + 'annotations/'
+recognition_train_images_dir = recognition_dir + 'train/images/'
+recognition_train_annotations_dir = recognition_dir + 'train/annotations/'
+recognition_test_images_dir = recognition_dir + 'test/images/'
+recognition_test_annotations_dir = recognition_dir + 'test/annotations/'
 
-for directory in [data_dir, recognition_images_dir, recognition_annotations_dir]:
+for directory in [data_dir,
+                  recognition_train_images_dir,
+                  recognition_train_annotations_dir,
+                  recognition_test_images_dir,
+                  recognition_test_annotations_dir]:
     if os.path.exists(directory):
         shutil.rmtree(directory)
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+pretrained_yolov3_uri = "https://github.com/OlafenwaMoses/ImageAI/releases/download/essential-v4/pretrained-yolov3.h5"
+pretrained_yolov3_model_path = os.getcwd() + '/pretrained-yolov3.h5'
 
 # +
 bddl = len(base_data_dir)
@@ -156,6 +166,19 @@ test_size = 0.3
 
 train_set = example_images[0:floor(len(example_images) * (1 - test_size))]
 test_set = example_images[-ceil(len(example_images) * test_size):]
+
+# +
+for path in train_set:
+    shutil.copy(base_data_dir + path, recognition_train_images_dir)
+    shutil.copy(os.path.basename(path)[:-5] + '.xml', recognition_train_annotations_dir)
+
+for path in test_set:
+    shutil.copy(base_data_dir + path, recognition_test_images_dir)
+    shutil.copy(os.path.basename(path)[:-5] + '.xml', recognition_test_annotations_dir)
+# -
+
+if not os.path.exists(pretrained_yolov3_model_path):
+    request.urlretrieve(pretrained_yolov3_uri, pretrained_yolov3_model_path)
 
 # +
 # h_crop = 0.3
