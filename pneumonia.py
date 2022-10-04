@@ -174,13 +174,10 @@ for example_image in example_images:
     nh = floor(height / wc)
     ch = floor(nh / 1)
     ct = floor((nh - ch) / 2)
-    
     img2 = cv2.resize(img, (nw, nh), interpolation = cv2.INTER_AREA)
     img3 = img2[ct:ct + ch, :]
     img3 = cv2.equalizeHist(img3)
-    
     kernel = np.ones((5,5), np.uint8)
-    
     img4 = adjust_gamma(img3, 0.6)
     img4a = cv2.GaussianBlur(img4, (13, 13), cv2.BORDER_REFLECT101)
     ret, img4b = cv2.threshold(img4a, 127, 255, cv2.THRESH_BINARY)
@@ -191,52 +188,36 @@ for example_image in example_images:
     ret, img4f = cv2.threshold(img4e, 127, 255, cv2.THRESH_BINARY)
     
     white_columns = np.where((255 - img4f).max(axis=0) > 0)[0]
-    
     x_start = min(white_columns)+10
     x_end = max(white_columns)-10
     img4g = img4[:,x_start:x_end]
     img4h = cv2.equalizeHist(img4g)
-    
     img5 = adjust_gamma(img4h, 1.2)
-    img5a = adjust_contrast(img5, 5)
-    ret, img5b = cv2.threshold(img5a, 127, 255, cv2.THRESH_BINARY)
-#     img5c = cv2.erode(img5b, kernel, iterations=3)
-    
-#     kernel = np.ones((5,5), np.uint8)
-#     kernel[:,0:2] = 0
-#     kernel[:,-2:] = 0
-    kernel2 = cv2.getStructuringElement(cv2.MORPH_CROSS, (2, 2))
-    img5c = cv2.dilate(img5b, kernel2, iterations=1)
-    img5d = cv2.morphologyEx(img5c, cv2.MORPH_CLOSE, np.ones((15,15), np.uint8))
-#     img5d = cv2.erode(img5d, kernel, iterations=4)
-    
-#     img5d = cv2.GaussianBlur(img5d, (3, 3), cv2.BORDER_REFLECT101)
-#     img5d = cv2.resize(img5d, (nw, 5), interpolation = cv2.INTER_AREA)
-#     img5d = cv2.resize(img5d, (nw, nh), interpolation = cv2.INTER_AREA)
-#     ret, img5d = cv2.threshold(img5d, 70, 255, cv2.THRESH_BINARY)
-    
-#     img5b = cv2.Canny(img5a, 140, 200)
-#     img5c = cv2.dilate(img5b, kernel, iterations=1)
-    
-#     kh = 2 * ceil(img5.shape[1] / 70) - 1    
-#     img5d = cv2.Sobel(img5a, cv2.CV_64F, 1, 0, ksize = kh)
-#     img5d = np.absolute(img5d)
-#     img5d = np.uint8(255 * img5d / np.max(img5d))
-#     img5d = cv2.equalizeHist(img5d)
-    
-    
+    img5a = adjust_contrast(img5, 5)    
+    img5b = cv2.GaussianBlur(img5a, (13, 13), cv2.BORDER_REFLECT101)
+    ret, img5c = cv2.threshold(img5b, 140, 255, cv2.THRESH_BINARY)
+
+    img5d = img5c + np.roll(img5c, floor(nh / 4), axis=0) + np.roll(img5c, floor(nh / 2), axis=0) + np.roll(img5c, floor(3 * nh / 4), axis=0)
+    img5d = np.flip(img5d) + img5d
+    img5d = cv2.morphologyEx(img5d, cv2.MORPH_CLOSE, kernel)
+    img5d = cv2.erode(img5d, kernel, iterations=10)
+    img5d = cv2.GaussianBlur(img5d, (13, 13), cv2.BORDER_REFLECT101)
+    img5d = cv2.resize(img5d, (nw, 3), interpolation = cv2.INTER_LANCZOS4)
+    img5d = cv2.resize(img5d, (nw, 1), interpolation = cv2.INTER_LANCZOS4)
+    img5d = cv2.resize(img5d, (nw, nh), interpolation = cv2.INTER_AREA)
+    ret, img5d = cv2.threshold(img5d, 140, 255, cv2.THRESH_BINARY)
+
     rows, cols = img5d.shape    
     non_empty_columns = np.where(img5d.max(axis=0) > 0)[0]
     x_from = min(non_empty_columns)
     x_to = max(non_empty_columns)
-#     print(non_empty_columns)
-#     print(x_from, x_to)
-    img10 = img5a[:, x_from + 1:x_to]
-
+    img10 = img5[:, x_from + 1:x_to]
+    img10 = cv2.equalizeHist(img10)
+    img11 = cv2.resize(img10, (nw, nw), interpolation = cv2.INTER_AREA)
     
     ax = plt.subplot(3, 6, i)
     plt.axis('off')
-    plt.imshow(img5d)
+    plt.imshow(img11)
     i += 1
 
 plt.show()
