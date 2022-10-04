@@ -23,6 +23,8 @@ from math import ceil, floor
 from pascal_voc_writer import Writer
 import shutil
 from urllib import request
+from imageai.Detection.Custom import DetectionModelTrainer
+import tensorflow as tf
 
 cv2.__version__
 
@@ -36,18 +38,23 @@ recognition_train_annotations_dir = recognition_dir + 'train/annotations/'
 recognition_test_images_dir = recognition_dir + 'test/images/'
 recognition_test_annotations_dir = recognition_dir + 'test/annotations/'
 
-for directory in [data_dir,
-                  recognition_train_images_dir,
-                  recognition_train_annotations_dir,
-                  recognition_test_images_dir,
-                  recognition_test_annotations_dir]:
-    if os.path.exists(directory):
-        shutil.rmtree(directory)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+# for directory in [data_dir,
+#                   recognition_dir,
+#                   recognition_train_images_dir,
+#                   recognition_train_annotations_dir,
+#                   recognition_test_images_dir,
+#                   recognition_test_annotations_dir]:
+#     if os.path.exists(directory):
+#         shutil.rmtree(directory)
+#     if not os.path.exists(directory):
+#         os.makedirs(directory)
 
-pretrained_yolov3_uri = "https://github.com/OlafenwaMoses/ImageAI/releases/download/essential-v4/pretrained-yolov3.h5"
-pretrained_yolov3_model_path = os.getcwd() + '/pretrained-yolov3.h5'
+# pretrained_yolov3_uri = "https://github.com/OlafenwaMoses/ImageAI/releases/download/essential-v4/pretrained-yolov3.h5"
+# pretrained_yolov3_model_path = os.getcwd() + '/pretrained-yolov3.h5'
+# -
+
+if not os.path.exists(pretrained_yolov3_model_path):
+    request.urlretrieve(pretrained_yolov3_uri, pretrained_yolov3_model_path)
 
 # +
 bddl = len(base_data_dir)
@@ -61,24 +68,24 @@ file_names_pneumonia = [path[bddl:] for path in glob.glob(base_data_dir + 'train
                                                                                                         glob.glob(
                                                                                                             '../data/chest_xray/test/PNEUMONIA/*.jpeg')] + [
                            path[bddl:] for path in glob.glob('../data/chest_xray/val/PNEUMONIA/*.jpeg')]
-# -
-
-image_sizes = [cv2.imread(base_data_dir + image, 0).shape for image in file_names_normal + file_names_pneumonia]
 
 # +
-widths = [shape[0] for shape in image_sizes]
-heights = [shape[1] for shape in image_sizes]
-areas = [shape[0] * shape[1] for shape in image_sizes]
+# image_sizes = [cv2.imread(base_data_dir + image, 0).shape for image in file_names_normal + file_names_pneumonia]
 
-print('min width:', min(widths))
-print('min height:', min(heights))
-print('max width:', max(widths))
-print('max height:', max(heights))
+# +
+# widths = [shape[0] for shape in image_sizes]
+# heights = [shape[1] for shape in image_sizes]
+# areas = [shape[0] * shape[1] for shape in image_sizes]
 
-plt.figure(figsize = (16, 6))
-plt.title('Distribution of Image Areas')
-plt.hist(areas, bins = 100)
-plt.show()
+# print('min width:', min(widths))
+# print('min height:', min(heights))
+# print('max width:', max(widths))
+# print('max height:', max(heights))
+
+# plt.figure(figsize = (16, 6))
+# plt.title('Distribution of Image Areas')
+# plt.hist(areas, bins = 100)
+# plt.show()
 
 # +
 if not os.path.exists(data_dir):
@@ -177,8 +184,25 @@ for path in test_set:
     shutil.copy(os.path.basename(path)[:-5] + '.xml', recognition_test_annotations_dir)
 # -
 
-if not os.path.exists(pretrained_yolov3_model_path):
-    request.urlretrieve(pretrained_yolov3_uri, pretrained_yolov3_model_path)
+trainer = DetectionModelTrainer()
+trainer.setModelTypeAsYOLOv3()
+trainer.setDataDirectory(data_directory = recognition_dir)
+trainer.setTrainConfig(object_names_array=["ROI"], batch_size = 4, num_experiments = 2,
+                       train_from_pretrained_model = pretrained_yolov3_model_path)
+trainer.trainModel()
+
+# +
+from imageai.Detection.Custom import CustomObjectDetection
+
+detector = CustomObjectDetection()
+detector.setModelTypeAsYOLOv3()
+detector.setModelPath("/Users/zhuvikin/workspace/ai-university/data/chest_xray/recognition/models/detection_model-ex-02--loss-90.25.h5") 
+detector.setJsonPath("/Users/zhuvikin/workspace/ai-university/data/chest_xray/recognition/json/detection_config.json")
+detector.loadModel()
+# -
+
+detections = detector.detectObjectsFromImage(input_image=base_data_dir + example_images[7], output_image_path="detected.jpg", minimum_percentage_probability=40)
+print(detections)
 
 # +
 # h_crop = 0.3

@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    105980,       2285]
-NotebookOptionsPosition[    103035,       2226]
-NotebookOutlinePosition[    103371,       2241]
-CellTagsIndexPosition[    103328,       2238]
+NotebookDataLength[    106937,       2307]
+NotebookOptionsPosition[    103766,       2244]
+NotebookOutlinePosition[    104102,       2259]
+CellTagsIndexPosition[    104059,       2256]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -2061,7 +2061,7 @@ Cell[BoxData[{
  RowBox[{
   RowBox[{"batchSize", "=", "1"}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
-  RowBox[{"idx", "=", "1341"}], ";"}], "\[IndentingNewLine]", 
+  RowBox[{"idx", "=", "7"}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"Print", "[", 
    RowBox[{"fileNamesN", "[", 
@@ -2128,14 +2128,14 @@ Cell[BoxData[{
    3.775272865684688*^9}, {3.7752729114826603`*^9, 3.7752729362148533`*^9}, {
    3.775273190814783*^9, 3.775273206043984*^9}, {3.775273786636077*^9, 
    3.77527379139896*^9}, {3.7752738665904827`*^9, 3.7752738668761787`*^9}, 
-   3.775274177562852*^9},
+   3.775274177562852*^9, {3.775291962388813*^9, 3.775291975170485*^9}},
  CellLabel->
-  "In[1229]:=",ExpressionUUID->"a97f47da-0e47-4c87-9d40-4c93759805ce"],
+  "In[1275]:=",ExpressionUUID->"a97f47da-0e47-4c87-9d40-4c93759805ce"],
 
 Cell[CellGroupData[{
 
 Cell[BoxData["\<\"/Users/zhuvikin/workspace/ai-university/data/chest_xray/\
-train/NORMAL/NORMAL2-IM-1423-0001.jpeg\"\>"], "Print",
+train/NORMAL/IM-0128-0001.jpeg\"\>"], "Print",
  CellChangeTimes->{{3.7752703192192917`*^9, 3.7752703353552847`*^9}, {
    3.775270366890826*^9, 3.775270378073835*^9}, {3.7752704737959957`*^9, 
    3.775270499253578*^9}, {3.7752705514560413`*^9, 3.775270652921489*^9}, {
@@ -2148,13 +2148,13 @@ train/NORMAL/NORMAL2-IM-1423-0001.jpeg\"\>"], "Print",
    3.7752724156428757`*^9, 3.775272624196822*^9}, {3.775272663437529*^9, 
    3.775272936583255*^9}, {3.775273162945471*^9, 3.775273206361112*^9}, {
    3.775273788044941*^9, 3.775273791649857*^9}, 3.77527386749936*^9, 
-   3.775274178267961*^9},
+   3.775274178267961*^9, {3.775291958309599*^9, 3.775291975453513*^9}},
  CellLabel->
   "During evaluation of \
-In[1229]:=",ExpressionUUID->"d4d2da1e-e7e0-4fcf-90bb-d586df9b7757"],
+In[1275]:=",ExpressionUUID->"b40de2e1-1580-42f8-b994-2c16dc91711b"],
 
 Cell[BoxData["\<\"/Users/zhuvikin/workspace/ai-university/data/chest_xray/\
-train/PNEUMONIA/person1626_bacteria_4291.jpeg\"\>"], "Print",
+train/PNEUMONIA/person1004_bacteria_2935.jpeg\"\>"], "Print",
  CellChangeTimes->{{3.7752703192192917`*^9, 3.7752703353552847`*^9}, {
    3.775270366890826*^9, 3.775270378073835*^9}, {3.7752704737959957`*^9, 
    3.775270499253578*^9}, {3.7752705514560413`*^9, 3.775270652921489*^9}, {
@@ -2167,10 +2167,10 @@ train/PNEUMONIA/person1626_bacteria_4291.jpeg\"\>"], "Print",
    3.7752724156428757`*^9, 3.775272624196822*^9}, {3.775272663437529*^9, 
    3.775272936583255*^9}, {3.775273162945471*^9, 3.775273206361112*^9}, {
    3.775273788044941*^9, 3.775273791649857*^9}, 3.77527386749936*^9, 
-   3.775274178270319*^9},
+   3.775274178267961*^9, {3.775291958309599*^9, 3.775291975455689*^9}},
  CellLabel->
   "During evaluation of \
-In[1229]:=",ExpressionUUID->"375c8c2b-74fd-41af-ab8e-afb66d1b3892"]
+In[1275]:=",ExpressionUUID->"c63d5ff3-76d7-40d9-a3ce-7b75cdd3cbda"]
 }, Open  ]],
 
 Cell[BoxData[
@@ -2178,13 +2178,11 @@ Cell[BoxData[
      FormBox[
       GraphicsBox[
        TagBox[RasterBox[CompressedData["
-1:eJztlj1rwzAQhi8dROCWW7xoCQEvXrJ40RJIvRWyOKXeE+qGLjY4gdJ/kH/d
-6quULqU6CVqVPGBjgU73nnQ63/Iw7p5uAOA016/d/uV2mvav96QHD8Pp+Tj0
-j3fDuT/2kzqYaRv/XPnTzL4dZkFCzSLdUnlS8E0Xcea/hKBI+zQywKaxDJov
-Iv1L7a7km1sN0NYAFX+BBdDMr8SDVpw9MN6clWL69SA/ejLJVypE9x2MtN61
-LYqQe/exWTVQtx5VV23bhiFAgigAm8vbpUEoRFjqGrTHpt1WnRrXHWk1X9X9
-gAIEWtkYeHE+BQCiKknw9t9Q+TPg4/LPhB1+A7TViqvc3zqyZZuJjr5uY3+/
-pStEXFwRDNIgU7YMkfWf8us4TK2JSJr8WoTEJDzxf9Ct5xjClQDeAXKWHN4=
+1:eJxTTMoPSmNiYGAo5gASQYnljkVFiZXBAkBOaF5xZnpeaopnXklqemqRRRJI
+mQMUj4JRMApGwSgYjICNEs3cMENEydHNyCAAxBQ6RRNsggA5WsFACuELsoAm
+0OuaZOo1hmiVJ992Jz1NqPUkBx5YQ9b0ZoaOujCUaCAGcIMdz5BlW/n8//NK
+2ywGMJ/UgGRkCKvrYGiengV3DykArAHkfT0nUrUigDzEDGMytQO1ipIb+2DA
+DU6BZAJwqmcky37k0EbPh0QDUZgpFOUgikqgUTAKRsEoGAWDFgAA4DUczA==
 
          "], {{0, 64}, {64, 0}}, {0, 255},
          ColorFunction->GrayLevel],
@@ -2200,9 +2198,12 @@ pStEXFwRDNIgU7YMkfWf8us4TK2JSJr8WoTEJDzxf9Ct5xjClQDeAXKWHN4=
       GraphicsBox[
        TagBox[RasterBox[CompressedData["
 1:eJxTTMoPSmNiYGAo5gASQYnljkVFiZXBAkBOaF5xZnpeaopnXklqemqRRRJI
-mQMUj4JRMApGwSgYfkCUciMsKDdigIEARbrnaIJIRnK1G1Nitx5DibGPRb4m
-MWqbMUTkgXGXuv///lQgLU+EeixAM9/Cx7gE6A4KANkhAA5zzTmU2E1h3A8G
-QIX8R4VSYBSMglEwCkbBsAMADMAYZA==
+mQMUj4KhAbgH2gGUAbaBdsAIB1IDYivjgNg67IAm2ToZQeWGCvk2g6oPBlHS
+yh54pAtowkwgA6AlHXKNQQfEl0NskCKX/IKLURRIGIMMUZEimP0wcwqbvA/D
+QrYshrA6YOGPNwWAnchWmYUm7OMukMrwnyFVwN0HTSarkg2uDxfQBDq8Lowh
+i20hg488pkqCOVtKCpTsuI2BhCj5xQDYYm6SYo06AC29kesDkDGacLNIM4Vb
+FItDSAEqoKAjP+zJL3VGARIYmDpwYOr7UQADQ7y9O8R7G6OAaAAAtWsakA==
+
          "], {{0, 64}, {64, 0}}, {0, 255},
          ColorFunction->GrayLevel],
         BoxForm`ImageTag[
@@ -2219,9 +2220,26 @@ QIX8R4VSYBSMglEwCkbBsAMADMAYZA==
   3.7752723793977833`*^9, {3.7752724167954617`*^9, 3.7752726252152843`*^9}, {
    3.77527266445177*^9, 3.775272937667727*^9}, {3.775273164096187*^9, 
    3.7752732066586943`*^9}, {3.775273788379754*^9, 3.7752737919773893`*^9}, 
-   3.7752738677916193`*^9, 3.77527417860629*^9},
+   3.7752738677916193`*^9, 3.77527417860629*^9, {3.775291958665175*^9, 
+   3.775291975799263*^9}},
  CellLabel->
-  "Out[1233]=",ExpressionUUID->"f09339c5-7833-42cc-a52d-b7a5c4dcdc09"]
+  "Out[1279]=",ExpressionUUID->"aef755a4-df44-48a0-bf37-4d07b0993bbb"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"fileNamesN", "[", 
+  RowBox[{"[", "1", "]"}], "]"}]], "Input",
+ CellChangeTimes->{{3.775274888294488*^9, 3.775274892693562*^9}},
+ CellLabel->
+  "In[1234]:=",ExpressionUUID->"b5735b88-3145-42a9-926e-e01487afa71f"],
+
+Cell[BoxData["\<\"/Users/zhuvikin/workspace/ai-university/data/chest_xray/\
+train/NORMAL/IM-0115-0001.jpeg\"\>"], "Output",
+ CellChangeTimes->{3.775274892988247*^9},
+ CellLabel->
+  "Out[1234]=",ExpressionUUID->"edc7efff-2eda-4c98-8f48-48c4025b90bf"]
 }, Open  ]]
 },
 WindowSize->{1252, 855},
@@ -2280,12 +2298,16 @@ Cell[34335, 1027, 58300, 960, 144, "Output",ExpressionUUID->"c8e6b45e-51fa-4088-
 }, Open  ]],
 Cell[92650, 1990, 2756, 65, 231, "Input",ExpressionUUID->"5b54288c-bbe9-4ab9-b660-3603b7fad00e"],
 Cell[CellGroupData[{
-Cell[95431, 2059, 3139, 73, 178, "Input",ExpressionUUID->"a97f47da-0e47-4c87-9d40-4c93759805ce"],
+Cell[95431, 2059, 3182, 73, 178, "Input",ExpressionUUID->"a97f47da-0e47-4c87-9d40-4c93759805ce"],
 Cell[CellGroupData[{
-Cell[98595, 2136, 1152, 17, 24, "Print",ExpressionUUID->"d4d2da1e-e7e0-4fcf-90bb-d586df9b7757"],
-Cell[99750, 2155, 1159, 17, 24, "Print",ExpressionUUID->"375c8c2b-74fd-41af-ab8e-afb66d1b3892"]
+Cell[98638, 2136, 1190, 17, 24, "Print",ExpressionUUID->"b40de2e1-1580-42f8-b994-2c16dc91711b"],
+Cell[99831, 2155, 1205, 17, 24, "Print",ExpressionUUID->"c63d5ff3-76d7-40d9-a3ce-7b75cdd3cbda"]
 }, Open  ]],
-Cell[100924, 2175, 2095, 48, 205, "Output",ExpressionUUID->"f09339c5-7833-42cc-a52d-b7a5c4dcdc09"]
+Cell[101051, 2175, 2174, 50, 205, "Output",ExpressionUUID->"aef755a4-df44-48a0-bf37-4d07b0993bbb"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[103262, 2230, 236, 5, 30, "Input",ExpressionUUID->"b5735b88-3145-42a9-926e-e01487afa71f"],
+Cell[103501, 2237, 249, 4, 34, "Output",ExpressionUUID->"edc7efff-2eda-4c98-8f48-48c4025b90bf"]
 }, Open  ]]
 }
 ]
