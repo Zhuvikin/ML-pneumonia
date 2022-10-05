@@ -162,21 +162,14 @@ ROIs = [
 
 fig = plt.figure(figsize = (16, 6))
 
-i = 1
-for example_image in example_images:
-    ROI = ROIs[i - 1]
-    img_path = equalized_data_dir + file_names_pneumonia[i - 1 + 0] # + 60
-    img = cv2.imread(img_path, 0)
+def normalize_image(img):
     width = img.shape[1]
     height = img.shape[0]
     nw = 512
     wc = width / nw
     nh = floor(height / wc)
-    ch = floor(nh / 1)
-    ct = floor((nh - ch) / 2)
     img2 = cv2.resize(img, (nw, nh), interpolation = cv2.INTER_AREA)
-    img3 = img2[ct:ct + ch, :]
-    img3 = cv2.equalizeHist(img3)
+    img3 = cv2.equalizeHist(img2)
     kernel = np.ones((5,5), np.uint8)
     img4 = adjust_gamma(img3, 0.6)
     img4a = cv2.GaussianBlur(img4, (13, 13), cv2.BORDER_REFLECT101)
@@ -188,86 +181,82 @@ for example_image in example_images:
     ret, img4f = cv2.threshold(img4e, 127, 255, cv2.THRESH_BINARY)
     
     white_columns = np.where((255 - img4f).max(axis=0) > 0)[0]
-    x_start = min(white_columns)+10
-    x_end = max(white_columns)-10
+    x_start = min(white_columns)
+    x_end = max(white_columns)
+    
+    cl = x_start
+    cr = img4f.shape[1] - x_end - 1
+    
     img4g = img4[:,x_start:x_end]
     img4h = cv2.equalizeHist(img4g)
+        
     img5 = adjust_gamma(img4h, 1.2)
     img5a = adjust_contrast(img5, 5)    
     img5b = cv2.GaussianBlur(img5a, (13, 13), cv2.BORDER_REFLECT101)
     ret, img5c = cv2.threshold(img5b, 140, 255, cv2.THRESH_BINARY)
-
-    img5d = img5c + np.roll(img5c, floor(nh / 4), axis=0) + np.roll(img5c, floor(nh / 2), axis=0) + np.roll(img5c, floor(3 * nh / 4), axis=0)
-    img5d = np.flip(img5d) + img5d
-    img5d = cv2.morphologyEx(img5d, cv2.MORPH_CLOSE, kernel)
-    img5d = cv2.erode(img5d, kernel, iterations=10)
-    img5d = cv2.GaussianBlur(img5d, (13, 13), cv2.BORDER_REFLECT101)
-    img5d = cv2.resize(img5d, (nw, 3), interpolation = cv2.INTER_LANCZOS4)
-    img5d = cv2.resize(img5d, (nw, 1), interpolation = cv2.INTER_LANCZOS4)
-    img5d = cv2.resize(img5d, (nw, nh), interpolation = cv2.INTER_AREA)
-    ret, img5d = cv2.threshold(img5d, 140, 255, cv2.THRESH_BINARY)
-
-    rows, cols = img5d.shape    
-    non_empty_columns = np.where(img5d.max(axis=0) > 0)[0]
-    x_from = min(non_empty_columns)
-    x_to = max(non_empty_columns)
-    img10 = img5[:, x_from + 1:x_to]
-    img10 = cv2.equalizeHist(img10)
-    img11 = cv2.resize(img10, (nw, nw), interpolation = cv2.INTER_AREA)
     
+    img5d = img5c + np.roll(img5c, floor(nh / 4), axis=0) + np.roll(img5c, floor(nh / 2), axis=0) + np.roll(img5c, floor(3 * nh / 4), axis=0)
+    img5d = np.flip(img5d, axis=0) + img5d
+    img5d = cv2.morphologyEx(img5d, cv2.MORPH_CLOSE, kernel)
+    img5d = cv2.erode(img5d, kernel, iterations=9)
+    img5d = cv2.GaussianBlur(img5d, (13, 13), cv2.BORDER_REFLECT101)
+    img5d = cv2.resize(img5d, (img4h.shape[1], 3), interpolation = cv2.INTER_LANCZOS4)
+    img5d = cv2.resize(img5d, (img4h.shape[1], 1), interpolation = cv2.INTER_LANCZOS4)
+    img5d = cv2.resize(img5d, (img4h.shape[1], nh), interpolation = cv2.INTER_AREA)
+    ret, img5d = cv2.threshold(img5d, 140, 255, cv2.THRESH_BINARY)
+    
+    white_columns = np.where((255 - img5d).max(axis=0) > 0)[0]
+    
+    if len(white_columns) > 0:
+        x_start = min(white_columns)
+        x_end = max(white_columns)
+        cl += x_start
+        cr += img5d.shape[1] - x_end - 1
+        img5d = img5d[:,x_start:x_end]
+
+        rows, cols = img5d.shape    
+        non_empty_columns = np.where(img5d.max(axis=0) > 0)[0]
+        if len(non_empty_columns) > 0:
+            x_from = min(non_empty_columns)
+            x_to = max(non_empty_columns)
+            cl += x_from
+            cr += img5d.shape[1] - x_to - 1
+            img10 = img5[:, x_from + 1:x_to]
+        else:
+            img10 = img5
+    else:
+        img10 = img5
+            
+    img10 = cv2.equalizeHist(img10)
+    
+    tw = 256
+    twc = img10.shape[1] / tw
+    th = floor(img10.shape[0] / twc)
+    img11 = cv2.resize(img10, (tw, th), interpolation = cv2.INTER_AREA)
+    
+    tho = 0
+    if th > tw:
+        tho = floor((th - tw) / 2)
+    img12 = img11[tho:th - tho,:]
+    img12 = cv2.resize(img12, (tw, tw), interpolation = cv2.INTER_AREA)
+    img12 = cv2.equalizeHist(img12)
+    return img12
+
+i = 1
+for example_image in example_images:
+    ROI = ROIs[i - 1]
+    img_path = equalized_data_dir + example_images[i - 1 + 0] # + 60
+    img = cv2.imread(img_path, 0)
+    normalized = normalize_image(img)
     ax = plt.subplot(3, 6, i)
     plt.axis('off')
-    plt.imshow(img11)
+    plt.imshow(normalized)
     i += 1
 
 plt.show()
-
-# +
-#     img5d = adjust_gamma(img5d, 0.7)
-#     img5d = adjust_contrast(img5d, 10)
-#     img5d = cv2.equalizeHist(img5d)
-# #     ret, img5d = cv2.threshold(img5d, 120, 255, cv2.THRESH_BINARY)
-#     img5d = cv2.erode(img5d, kernel, iterations=1)
-# #     img5d = cv2.dilate(img5d, kernel, iterations=3)
-#     img5d = cv2.GaussianBlur(img5d, (kh, kh), cv2.BORDER_REFLECT101)
-#     ret, img5d = cv2.threshold(img5d, 80, 255, cv2.THRESH_BINARY)
-#     img5d = cv2.erode(img5d, kernel, iterations=3)
-#     img5d = cv2.dilate(img5d, kernel, iterations=3)
-    
-#     img5d = cv2.resize(img5d, (nw, 3), interpolation = cv2.INTER_LANCZOS4)
+# -
 
 
-# #     img5d = cv2.GaussianBlur(img5d, (kh, kh), cv2.BORDER_REFLECT101)
-# #     img5d = cv2.resize(img5d, (nw, 1), interpolation = cv2.INTER_LANCZOS4)
-#     img5d = cv2.resize(img5d, (nw, nh), interpolation = cv2.INTER_AREA)
-# #     ret, img5d = cv2.threshold(img5d, 130, 255, cv2.THRESH_BINARY)
-    
-# #     ret, img5d = cv2.threshold(img5d, 210, 255, cv2.THRESH_BINARY)
-# #     img5d = cv2.GaussianBlur(img5d, (kh, kh), cv2.BORDER_REFLECT101)
-# #     img5d = cv2.erode(img5d, kernel, iterations=3)
-        
-# #     img5d = cv2.resize(img5d, (nw, 5), interpolation = cv2.INTER_LANCZOS4)
-# #     img5d = cv2.resize(img5d, (nw, 1), interpolation = cv2.INTER_AREA)
-# #     img5d = cv2.resize(img5d, (nw, nh), interpolation = cv2.INTER_AREA)
-# #     ret, img5d = cv2.threshold(img5d, 130, 255, cv2.THRESH_BINARY)
-# #     img5d = cv2.erode(img5d, kernel, iterations=2)
-    
-# #     kernel = np.ones((5,5), np.uint8)
-# #     kernel[:,0:2] = 0
-# #     kernel[:,-2:] = 0
-# #     print(kernel)
-# #     img5c = cv2.dilate(img5b, kernel, iterations=2)
-# #     img5d = cv2.GaussianBlur(img5c, (1, 103), cv2.BORDER_REFLECT101)
-    
-# #     img6 = cv2.GaussianBlur(img5b, (1, 1), cv2.BORDER_REFLECT101)
-# #     img7 = cv2.resize(img6, (nw, 10), interpolation = cv2.INTER_AREA)
-
-# #     img7 = cv2.resize(img5d, (nw, 3), interpolation = cv2.INTER_AREA)
-# #     img7 = cv2.resize(img7, (nw, 1), interpolation = cv2.INTER_AREA)
-# #     img8 = cv2.resize(img7, (nw, nh), interpolation = cv2.INTER_AREA)
-# #     img8 = adjust_gamma(img8, 10)
-    
-# #     ret, img9 = cv2.threshold(img8, 150, 255, cv2.THRESH_BINARY)
 
 # +
 test_size = 0.3
