@@ -27,6 +27,8 @@ from urllib import request
 from imageai.Detection.Custom import DetectionModelTrainer
 import tensorflow as tf
 from tqdm import tqdm
+from skimage import morphology
+from sklearn.preprocessing import StandardScaler
 
 cv2.__version__
 
@@ -42,7 +44,6 @@ recognition_test_images_dir = recognition_dir + 'test/images/'
 recognition_test_annotations_dir = recognition_dir + 'test/annotations/'
 
 for directory in [data_dir,
-                  equalized_data_dir,
                   recognition_dir,
                   recognition_train_images_dir,
                   recognition_train_annotations_dir,
@@ -50,13 +51,6 @@ for directory in [data_dir,
                   recognition_test_annotations_dir]:
     if not os.path.exists(directory):
         os.makedirs(directory)
-
-pretrained_yolov3_uri = "https://github.com/OlafenwaMoses/ImageAI/releases/download/essential-v4/pretrained-yolov3.h5"
-pretrained_yolov3_model_path = os.getcwd() + '/pretrained-yolov3.h5'
-# -
-
-if not os.path.exists(pretrained_yolov3_model_path):
-    request.urlretrieve(pretrained_yolov3_uri, pretrained_yolov3_model_path)
 
 # +
 bddl = len(base_data_dir)
@@ -172,6 +166,12 @@ def normalize_image(image, tw = 256):
     cropped_2 = cv2.equalizeHist(cropped_2)
     return cropped_2
 
+def remove_small_regions(img, size):
+    """Morphologically removes small (less than size) connected regions of 0s or 1s."""
+    img = morphology.remove_small_objects(img, size)
+    img = morphology.remove_small_holes(img, size)
+    return img
+
 
 # +
 fig = plt.figure(figsize = (17, 6))
@@ -193,68 +193,97 @@ for example_image in example_images:
 
 plt.subplots_adjust(wspace = 0, hspace = 0)
 plt.show()
+# -
 
+
+problems = ['train/NORMAL/IM-0492-0001.jpeg',
+            'train/NORMAL/IM-0546-0001.jpeg',
+            'train/NORMAL/NORMAL2-IM-0865-0001.jpeg',
+            'train/PNEUMONIA/person26_bacteria_132.jpeg',
+            'train/PNEUMONIA/person38_bacteria_195.jpeg',
+            'train/PNEUMONIA/person258_bacteria_1205.jpeg',
+            'train/PNEUMONIA/person272_virus_559.jpeg',
+            'train/PNEUMONIA/person328_bacteria_1515.jpeg',
+            'train/PNEUMONIA/person417_bacteria_1842.jpeg',
+            'train/PNEUMONIA/person482_virus_984.jpeg',
+            'train/PNEUMONIA/person490_bacteria_2070.jpeg',
+            'train/PNEUMONIA/person565_bacteria_2348.jpeg',
+            'train/PNEUMONIA/person563_bacteria_2340.jpeg',
+            'train/PNEUMONIA/person571_virus_1114.jpeg',
+            'train/PNEUMONIA/person605_bacteria_2468.jpeg',
+            'train/PNEUMONIA/person688_virus_1282.jpeg',
+            'train/PNEUMONIA/person688_virus_1281.jpeg',
+            'train/PNEUMONIA/person799_virus_1431.jpeg',
+            'train/PNEUMONIA/person846_bacteria_2766.jpeg',
+            'train/PNEUMONIA/person902_bacteria_2827.jpeg',
+            'train/PNEUMONIA/person979_virus_1654.jpeg',
+            'train/PNEUMONIA/person1087_virus_1799.jpeg',
+            'train/PNEUMONIA/person1162_virus_1950.jpeg',
+            'train/PNEUMONIA/person1345_bacteria_3424.jpeg',
+            'train/PNEUMONIA/person1395_bacteria_3544.jpeg',
+            'train/PNEUMONIA/person1723_bacteria_4548.jpeg']
+
+for path in tqdm(file_names_normal + file_names_pneumonia):
+    img = cv2.imread(base_data_dir + path, 0)
+    normalized = normalize_image(img, 256)
+
+    directory = os.path.dirname(data_dir + path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    cv2.imwrite(data_dir + path, normalized)
+
+# +
+from keras.models import load_model
+
+model_name = '/Users/zhuvikin/workspace/lung-segmentation-2d/trained_model.hdf5'
+UNet = load_model(model_name)
 
 # +
 fig = plt.figure(figsize = (17, 6))
 i = 1
-for problem in problems[:18]:
-    ROI = ROIs[i - 1]
-    img_path = equalized_data_dir + problem + '.jpeg'
-    img = cv2.imread(img_path, 0)
+im_shape = (256, 256)
+scaler = StandardScaler()
 
+for problem in problems[18:26]: # file_names_pneumonia[0:18]: # 
+    img_path = base_data_dir + problem
+    original = cv2.imread(img_path, 0)
+    img = cv2.resize(original, im_shape, interpolation = cv2.INTER_AREA)
+    img = cv2.equalizeHist(img)
+    img = adjust_gamma(img, 0.7)
+    img = adjust_contrast(img, 3)
+    
+    img2 = img.astype(float)
+    img2 = scaler.fit_transform(img2) / 3       
+    img2 = np.expand_dims(img2, -1)
+    inp_shape = img2.shape
+    pred = UNet.predict([[img2]])[..., 0].reshape(inp_shape[:2])
+    pr = pred > 0.5
+    pr = remove_small_regions(pr, 0.01 * np.prod(im_shape))
+    pr = pr.astype(int)
+    
+    non_empty_columns = np.where(pr.max(axis = 0) > 0)[0]
+    left = min(non_empty_columns)
+    right = max(non_empty_columns)
+    top = min(non_empty_rows)
+    bottom = max(non_empty_rows)
+    
+#     print(left, right, top, bottom)
+    non_empty_rows = np.where(pr.max(axis = 1) > 0)[0]
+    rect = patches.Rectangle((left, top), right - left, bottom - top,
+                             linewidth=1, edgecolor='w', facecolor='none')
+    
     ax = plt.subplot(3, 12, 2 * (i - 1) + 1)
+    ax.add_patch(rect)
     plt.axis('off')
     plt.imshow(img, cmap = 'gray')
 
-    normalized = normalize_image(img, 256)
     ax = plt.subplot(3, 12, 2 * (i - 1) + 2)
     plt.axis('off')
-    plt.imshow(normalized, cmap = 'magma')
+    plt.imshow(pr, cmap = 'gray')
+    
     i += 1
 
 plt.subplots_adjust(wspace = 0.03, hspace = 0)
 plt.show()
-
-# +
-# for path in tqdm(file_names_normal + file_names_pneumonia):
-#     img = cv2.imread(base_data_dir + path, 0)
-#     normalized = normalize_image(img, 256)
-
-#     directory = os.path.dirname(data_dir + path)
-#     if not os.path.exists(directory):
-#         os.makedirs(directory)
-#     cv2.imwrite(data_dir + path, normalized)
-
-# +
-# problems = ['train/NORMAL/IM-0492-0001',
-#             'train/NORMAL/IM-0546-0001',
-#             'train/NORMAL/NORMAL2-IM-0865-0001',
-#             'train/PNEUMONIA/person26_bacteria_132',
-#             'train/PNEUMONIA/person38_bacteria_195',
-#             'train/PNEUMONIA/person258_bacteria_1205',
-#             'train/PNEUMONIA/person272_virus_559',
-#             'train/PNEUMONIA/person328_bacteria_1515',
-#             'train/PNEUMONIA/person417_bacteria_1842',
-#             'train/PNEUMONIA/person482_virus_984',
-#             'train/PNEUMONIA/person490_bacteria_2070',
-#             'train/PNEUMONIA/person565_bacteria_2348',
-#             'train/PNEUMONIA/person563_bacteria_2340',
-#             'train/PNEUMONIA/person571_virus_1114',
-#             'train/PNEUMONIA/person605_bacteria_2468',
-#             'train/PNEUMONIA/person688_virus_1282',
-#             'train/PNEUMONIA/person688_virus_1281',
-#             'train/PNEUMONIA/person799_virus_1431',
-#             'train/PNEUMONIA/person846_bacteria_2766',
-#             'train/PNEUMONIA/person902_bacteria_2827',
-#             'train/PNEUMONIA/person979_virus_1654',
-#             'train/PNEUMONIA/person1087_virus_1799',
-#             'train/PNEUMONIA/person1162_virus_1950',
-#             'train/PNEUMONIA/person1345_bacteria_3424',
-#             'train/PNEUMONIA/person1395_bacteria_3544',
-#             'train/PNEUMONIA/person1723_bacteria_4548']
 # -
-
-
-
 
