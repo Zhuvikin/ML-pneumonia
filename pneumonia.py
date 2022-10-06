@@ -152,15 +152,15 @@ def remove_small_regions(img, size):
 #     i += 1
 
 
-i = 0
-for path in tqdm_notebook(file_names_pneumonia):
-    img = cv2.imread(base_data_dir + path, 0)
-    normalized = normalize_image(img, 256)
-    if 'bacteria' in path:
-        cv2.imwrite(bacteria_dir + '{0:04d}.jpeg'.format(i), normalized)
-    else:
-        cv2.imwrite(virus_dir + '{0:04d}.jpeg'.format(i), normalized)
-    i += 1
+# i = 0
+# for path in tqdm_notebook(file_names_pneumonia):
+#     img = cv2.imread(base_data_dir + path, 0)
+#     normalized = normalize_image(img, 256)
+#     if 'bacteria' in path:
+#         cv2.imwrite(bacteria_dir + '{0:04d}.jpeg'.format(i), normalized)
+#     else:
+#         cv2.imwrite(virus_dir + '{0:04d}.jpeg'.format(i), normalized)
+#     i += 1
 
 # -
 
