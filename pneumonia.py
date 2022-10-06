@@ -95,17 +95,7 @@ def normalize_image(original, target_width = 256):
     img = cv2.equalizeHist(img)
     img = adjust_gamma(img, 0.75)
     img = img * 1.2
-    
-
-    #     mask=np.zeros((256, 256),dtype=np.uint8)
-    #     cv2.rectangle(mask,(0,0),(255,255),(255,255,255),10)
-    #     mask = cv2.GaussianBlur(mask, (33, 33), cv2.BORDER_REFLECT101)
-    #     img = img + mask
-
     img = np.clip(img, 0, 255)
-#     img = cv2.equalizeHist(img)
-    
-    #     img = adjust_contrast(img, 3)
 
     img2 = img.astype(float)
     img2 -= img2.mean()
@@ -124,6 +114,12 @@ def normalize_image(original, target_width = 256):
     right = max(non_empty_columns) if len(non_empty_columns) > 0 else 256
     top = min(non_empty_rows) if len(non_empty_rows) > 0 else 0
     bottom = max(non_empty_rows) if len(non_empty_rows) > 0 else 256
+    
+    if right < 256 / 1.9:
+        right = 256 - left
+        
+    if left > 256 / 2.1:
+        left = 256 - right
 
     left_r = left / 256
     right_r = right / 256
@@ -138,7 +134,7 @@ def normalize_image(original, target_width = 256):
     cropped = original[t:t + h, l:l + w]
     resized = cv2.resize(cropped, (target_width, target_width), interpolation = cv2.INTER_AREA)
     equalized = cv2.equalizeHist(resized)
-    return 256 * pr # img # equalized #
+    return equalized
 
 
 def remove_small_regions(img, size):
@@ -146,14 +142,6 @@ def remove_small_regions(img, size):
     img = morphology.remove_small_objects(img, size)
     img = morphology.remove_small_holes(img, size)
     return img
-
-
-# +
-pb = [1073, 1261, 1289, 1297, 1412, 1417, 1464, 3906, 321, 371, 426, 544, 581, 694, 749, 883, 1220, 1225, 1586,
-      1700, 1707, 1777, 1832, 1859, 1969, 1999, 2163, 2497, 2642, 2741, 2778, 3009, 3076, 3187, 3540, 3694,
-      3774]
-
-# list(map(lambda i: file_names_pneumonia[i], pb))
 
 # +
 # i = 0
@@ -165,7 +153,7 @@ pb = [1073, 1261, 1289, 1297, 1412, 1417, 1464, 3906, 321, 371, 426, 544, 581, 6
 
 
 i = 0
-for path in tqdm_notebook(list(map(lambda i: file_names_pneumonia[i], pb))): # tqdm_notebook(file_names_pneumonia):
+for path in tqdm_notebook(file_names_pneumonia):
     img = cv2.imread(base_data_dir + path, 0)
     normalized = normalize_image(img, 256)
     if 'bacteria' in path:
