@@ -18,6 +18,7 @@ import cv2
 import glob
 import os
 import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib import patches
 from math import ceil, floor
@@ -29,6 +30,8 @@ import tensorflow as tf
 from tqdm import tqdm, tqdm_notebook
 from skimage import morphology
 from sklearn.preprocessing import MinMaxScaler
+from keras.utils.data_utils import get_file
+from keras.models import load_model
 
 cv2.__version__
 
@@ -40,8 +43,9 @@ normal_dir = data_dir + 'normal/'
 pneumonia_dir = data_dir + 'pneumonia/'
 bacteria_dir = pneumonia_dir + 'bacteria/'
 virus_dir = pneumonia_dir + 'virus/'
+models_dir = './models/'
 
-for directory in [normal_dir, bacteria_dir, virus_dir]:
+for directory in [normal_dir, bacteria_dir, virus_dir, models_dir]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -57,14 +61,17 @@ file_names_pneumonia = [path[bddl:] for path in glob.glob(base_data_dir + 'train
                                                                                                         glob.glob(
                                                                                                             '../data/chest_xray/test/PNEUMONIA/*.jpeg')] + [
                            path[bddl:] for path in glob.glob('../data/chest_xray/val/PNEUMONIA/*.jpeg')]
+# -
 
-# +
-from keras.models import load_model
+get_file('lung_segmentation.hdf5',
+         'https://raw.githubusercontent.com/imlab-uiip/lung-segmentation-2d/master/trained_model.hdf5',
+         cache_dir = models_dir, cache_subdir = 'lung')
 
-model_name = '/Users/zhuvikin/workspace/lung-segmentation-2d/trained_model.hdf5'
+model_name = models_dir + 'lung/lung_segmentation.hdf5'
 UNet = load_model(model_name)
 
 
+# +
 def adjust_gamma(image, gamma = 1.0):
     invGamma = 1.0 / gamma
     table = np.array([
@@ -114,10 +121,10 @@ def normalize_image(original, target_width = 256):
     right = max(non_empty_columns) if len(non_empty_columns) > 0 else 256
     top = min(non_empty_rows) if len(non_empty_rows) > 0 else 0
     bottom = max(non_empty_rows) if len(non_empty_rows) > 0 else 256
-    
+
     if right < 256 / 1.9:
         right = 256 - left
-        
+
     if left > 256 / 2.1:
         left = 256 - right
 
@@ -143,25 +150,60 @@ def remove_small_regions(img, size):
     img = morphology.remove_small_holes(img, size)
     return img
 
+
 # +
-# i = 0
-# for path in tqdm_notebook(file_names_normal):
-#     img = cv2.imread(base_data_dir + path, 0)
-#     normalized = normalize_image(img, 256)
-#     cv2.imwrite(normal_dir + '{0:04d}.jpeg'.format(i), normalized)
-#     i += 1
+i = 0
+for path in tqdm_notebook(file_names_normal):
+    output_path = normal_dir + '{0:04d}.jpeg'.format(i)
+    if not os.path.exists(output_path):
+        img = cv2.imread(base_data_dir + path, 0)
+        normalized = normalize_image(img, 256)
+        cv2.imwrite(output_path, normalized)
+    i += 1
 
+i = 0
+for path in tqdm_notebook(file_names_pneumonia):
+    if 'bacteria' in path:
+        output_path = bacteria_dir + '{0:04d}.jpeg'.format(i)
+    else:
+        output_path = virus_dir + '{0:04d}.jpeg'.format(i)
+    if not os.path.exists(output_path):
+        img = cv2.imread(base_data_dir + path, 0)
+        normalized = normalize_image(img, 256)
+        cv2.imwrite(output_path, normalized)
+    i += 1
+# + {}
+normal_df = pd.DataFrame({'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0})
+bacteria_df = pd.DataFrame({'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0})
+virus_df = pd.DataFrame({'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1})
 
-# i = 0
-# for path in tqdm_notebook(file_names_pneumonia):
-#     img = cv2.imread(base_data_dir + path, 0)
-#     normalized = normalize_image(img, 256)
-#     if 'bacteria' in path:
-#         cv2.imwrite(bacteria_dir + '{0:04d}.jpeg'.format(i), normalized)
-#     else:
-#         cv2.imwrite(virus_dir + '{0:04d}.jpeg'.format(i), normalized)
-#     i += 1
-
+dataset = pd.concat([normal_df, bacteria_df, virus_df])
+dataset = dataset.sort_values('path')
+dataset = dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
 # -
 
 
+pd.set_option('max_colwidth', 100)
+dataset.head(10)
+
+# +
+total_amount = dataset.shape[0]
+normal_amount = normal_df.shape[0]
+bacteria_amount = bacteria_df.shape[0]
+virus_amount = virus_df.shape[0]
+
+print('Total amount of images:', dataset.shape[0])
+
+labels = \
+    'Normal ({0:d})'.format(normal_amount), \
+    'Bacteria ({0:d})'.format(bacteria_amount), \
+    'Virus ({0:d})'.format(virus_amount)
+
+sizes = [normal_amount / total_amount, bacteria_amount / total_amount, virus_amount / total_amount]
+colors = ['#9BCB40', '#FEB0CB', '#FED0CB']
+fig1, ax1 = plt.subplots()
+ax1.pie(sizes, explode = (0.1, 0, 0), labels = labels, autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax1.axis('equal')
+
+plt.show()
+# -
