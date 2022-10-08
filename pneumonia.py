@@ -29,6 +29,13 @@ from keras.preprocessing.image import ImageDataGenerator
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.model_selection import train_test_split
 
+from keras.optimizers import Adam, SGD, RMSprop
+from keras.models import Sequential,Input,Model
+from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, Flatten, Input, LSTM, TimeDistributed
+from keras.layers.normalization import BatchNormalization
+from keras.layers.advanced_activations import LeakyReLU
+from keras.callbacks import EarlyStopping
+
 cv2.__version__
 
 # +
@@ -143,12 +150,14 @@ def remove_small_regions(img, size):
 
 
 # +
+image_width = 256
+
 i = 0
 for path in tqdm_notebook(file_names_normal):
     output_path = normal_dir + '{0:04d}.jpeg'.format(i)
     if not os.path.exists(output_path):
         img = cv2.imread(base_data_dir + path, 0)
-        normalized = normalize_image(img, 256)
+        normalized = normalize_image(img, image_width)
         cv2.imwrite(output_path, normalized)
     i += 1
 
@@ -160,7 +169,7 @@ for path in tqdm_notebook(file_names_pneumonia):
         output_path = virus_dir + '{0:04d}.jpeg'.format(i)
     if not os.path.exists(output_path):
         img = cv2.imread(base_data_dir + path, 0)
-        normalized = normalize_image(img, 256)
+        normalized = normalize_image(img, image_width)
         cv2.imwrite(output_path, normalized)
     i += 1
 # + {}
@@ -197,7 +206,7 @@ def sizes(normal_amount, bacteria_amount, virus_amount):
 
 fig1, ax1 = plt.subplots()
 ax1.pie(sizes(normal_df.shape[0], bacteria_df.shape[0], virus_df.shape[0]),
-        explode = (0.1, 0, 0), labels = labels(dataset.shape[0], bacteria_df.shape[0], virus_df.shape[0]),
+        explode = (0.1, 0, 0), labels = labels(normal_df.shape[0], bacteria_df.shape[0], virus_df.shape[0]),
         autopct = '%1.1f%%', startangle = 90, colors = colors)
 ax1.axis('equal')
 ax1.title.set_text('Data Set')
@@ -260,7 +269,7 @@ imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True)
 batch_size = 4
 x_col = 'path'
 y_col = 'target'
-classes = ['Pneumonia', 'Normal']
+classes = ['Normal', 'Pneumonia']
 mode = 'grayscale'
 target_size = (256, 256)
 
@@ -270,10 +279,9 @@ train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_co
                                                      class_mode = 'binary', color_mode = mode)
 
 print('\nValidation generator:')
-validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col,
-                                                          classes = classes,
-                                                          seed = 0, target_size = target_size, batch_size = batch_size,
-                                                          class_mode = 'binary', color_mode = mode)
+validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col, classes = classes,
+                                                          seed = 0, target_size = target_size, batch_size = 1,
+                                                          class_mode = 'binary', color_mode = mode, shuffle = False)
 
 print('\nTest generator:')
 test_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, classes = classes,
@@ -281,3 +289,50 @@ test_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col,
                                                     class_mode = 'binary', color_mode = mode)
 
 # -
+
+model = Sequential()
+model.add(Conv2D(32,(7,7),activation='relu', input_shape = train_generator.image_shape))
+model.add(MaxPooling2D((2,2)))
+model.add(BatchNormalization())
+model.add(Dropout(0.15))
+model.add(Conv2D(64,(5,5),activation='relu'))
+model.add(MaxPooling2D((2,2)))
+model.add(BatchNormalization())
+model.add(Dropout(0.15))
+model.add(Conv2D(128,(3,3),activation='relu'))
+model.add(MaxPooling2D((2,2)))
+model.add(BatchNormalization())
+model.add(Dropout(0.15))
+model.add(Conv2D(128,(3,3),activation='relu'))
+model.add(MaxPooling2D((2,2)))
+model.add(BatchNormalization())
+model.add(Dropout(0.15))
+model.add(GlobalAveragePooling2D())
+model.add(Dense(1000, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+model.summary()
+
+# optimizer = Adam(lr = 0.0001)
+early_stopping_monitor = EarlyStopping(patience = 3, monitor = 'val_acc', mode='max', verbose = 1)
+model.compile(loss='binary_crossentropy', metrics=['accuracy'], optimizer = 'adam')
+history = model.fit_generator(epochs = 5, shuffle = True, validation_data = validation_generator,
+                              steps_per_epoch = 500, generator = train_generator, validation_steps = 3, 
+                              verbose = 1, callbacks=[early_stopping_monitor])
+
+# +
+# prediction = model.predict_generator(generator=test_generator, verbose=2, steps=100)
+# -
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.set_facecolor('w')
+ax.grid(b=False)
+ax.plot(history.history['acc'], color='red')
+ax.plot(history.history['val_acc'], color ='green')
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='lower right')
+plt.show()
+
+
