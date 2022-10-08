@@ -20,19 +20,11 @@ import os
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from matplotlib import patches
 from math import ceil, floor
-from pascal_voc_writer import Writer
-import shutil
-from urllib import request
-from imageai.Detection.Custom import DetectionModelTrainer
-import tensorflow as tf
 from tqdm import tqdm, tqdm_notebook
 from skimage import morphology
-from sklearn.preprocessing import MinMaxScaler
 from keras.utils.data_utils import get_file
 from keras.models import load_model
-from sklearn.decomposition import PCA
 from keras.preprocessing.image import ImageDataGenerator
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.model_selection import train_test_split
@@ -132,11 +124,6 @@ def normalize_image(original, target_width = 256):
     if left > 256 / 2.1:
         left = 256 - right
 
-    left_r = left / 256
-    right_r = right / 256
-    top_r = top / 256
-    bottom_r = bottom / 256
-
     l = floor(left / width_coeff)
     t = floor(top / height_coeff)
     w = floor((right - left) / width_coeff)
@@ -218,7 +205,7 @@ plt.show()
 
 # +
 test_size = 0.2
-validation_size = 0.005
+validation_size = 0.006
 
 sampler = RandomUnderSampler(random_state = 0)
 X_balanced, _ = sampler.fit_resample(dataset[['path']].values, dataset[['target']].values)
@@ -236,7 +223,7 @@ X_train_validation, X_test, y_train_validation, _ = train_test_split(
     test_size = test_size, random_state = 0)
 X_train, X_validation, _, _ = train_test_split(
     X_train_validation, y_train_validation,
-    test_size = validation_size, random_state = 0)
+    test_size = validation_size, random_state = 2)
 
 train_dataset = pd.merge(pd.DataFrame({'path': X_train}), dataset, on = 'path')
 validation_dataset = pd.merge(pd.DataFrame({'path': X_validation}), dataset, on = 'path')
@@ -268,7 +255,7 @@ ax2.title.set_text('Test Set')
 plt.show()
 
 # +
-imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True, validation_split = 0.05)
+imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True)
 
 batch_size = 4
 x_col = 'path'
@@ -280,15 +267,15 @@ target_size = (256, 256)
 print('Train generator:')
 train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col, classes = classes,
                                                      seed = 0, target_size = target_size, batch_size = batch_size,
-                                                     class_mode = 'binary', color_mode = mode, subset = 'training')
+                                                     class_mode = 'binary', color_mode = mode)
 
 print('\nValidation generator:')
-validation_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, classes = classes,
+validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col,
+                                                          classes = classes,
                                                           seed = 0, target_size = target_size, batch_size = batch_size,
-                                                          class_mode = 'binary', color_mode = mode,
-                                                          subset = 'validation')
+                                                          class_mode = 'binary', color_mode = mode)
 
-print('Test generator:')
+print('\nTest generator:')
 test_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, classes = classes,
                                                     seed = 0, target_size = target_size, batch_size = batch_size,
                                                     class_mode = 'binary', color_mode = mode)
