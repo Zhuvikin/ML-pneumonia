@@ -32,6 +32,10 @@ from skimage import morphology
 from sklearn.preprocessing import MinMaxScaler
 from keras.utils.data_utils import get_file
 from keras.models import load_model
+from sklearn.decomposition import PCA
+from keras.preprocessing.image import ImageDataGenerator
+from imblearn.under_sampling import RandomUnderSampler
+from sklearn.model_selection import train_test_split
 
 cv2.__version__
 
@@ -173,9 +177,12 @@ for path in tqdm_notebook(file_names_pneumonia):
         cv2.imwrite(output_path, normalized)
     i += 1
 # + {}
-normal_df = pd.DataFrame({'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0})
-bacteria_df = pd.DataFrame({'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0})
-virus_df = pd.DataFrame({'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1})
+normal_df = pd.DataFrame(
+    {'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
+bacteria_df = pd.DataFrame(
+    {'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
+virus_df = pd.DataFrame(
+    {'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
 
 dataset = pd.concat([normal_df, bacteria_df, virus_df])
 dataset = dataset.sort_values('path')
@@ -187,23 +194,103 @@ pd.set_option('max_colwidth', 100)
 dataset.head(10)
 
 # +
-total_amount = dataset.shape[0]
-normal_amount = normal_df.shape[0]
-bacteria_amount = bacteria_df.shape[0]
-virus_amount = virus_df.shape[0]
+colors = ['#86ddf6', '#f9f0c8', '#fcde8b']
 
-print('Total amount of images:', dataset.shape[0])
 
-labels = \
+def labels(normal_amount, bacteria_amount, virus_amount): return \
     'Normal ({0:d})'.format(normal_amount), \
     'Bacteria ({0:d})'.format(bacteria_amount), \
     'Virus ({0:d})'.format(virus_amount)
 
-sizes = [normal_amount / total_amount, bacteria_amount / total_amount, virus_amount / total_amount]
-colors = ['#9BCB40', '#FEB0CB', '#FED0CB']
+
+def sizes(normal_amount, bacteria_amount, virus_amount):
+    total = normal_amount + bacteria_amount + virus_amount
+    return [normal_amount / total, bacteria_amount / total, virus_amount / total]
+
+
 fig1, ax1 = plt.subplots()
-ax1.pie(sizes, explode = (0.1, 0, 0), labels = labels, autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax1.pie(sizes(normal_df.shape[0], bacteria_df.shape[0], virus_df.shape[0]),
+        explode = (0.1, 0, 0), labels = labels(dataset.shape[0], bacteria_df.shape[0], virus_df.shape[0]),
+        autopct = '%1.1f%%', startangle = 90, colors = colors)
 ax1.axis('equal')
+ax1.title.set_text('Data Set')
+plt.show()
+
+# +
+test_size = 0.2
+validation_size = 0.005
+
+sampler = RandomUnderSampler(random_state = 0)
+X_balanced, _ = sampler.fit_resample(dataset[['path']].values, dataset[['target']].values)
+
+balanced_dataset = pd.DataFrame({'path': X_balanced[:, 0]})
+balanced_dataset = balanced_dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
+balanced_dataset = pd.merge(balanced_dataset, dataset, on = 'path')
+rest_dataset = pd.DataFrame(
+    {'path': list(set(X_balanced[:, 0].tolist()).symmetric_difference(dataset[['path']].values[:, 0].tolist()))})
+rest_dataset = rest_dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
+rest_dataset = pd.merge(rest_dataset, dataset, on = 'path')
+
+X_train_validation, X_test, y_train_validation, _ = train_test_split(
+    balanced_dataset.path.values, balanced_dataset.target.values,
+    test_size = test_size, random_state = 0)
+X_train, X_validation, _, _ = train_test_split(
+    X_train_validation, y_train_validation,
+    test_size = validation_size, random_state = 0)
+
+train_dataset = pd.merge(pd.DataFrame({'path': X_train}), dataset, on = 'path')
+validation_dataset = pd.merge(pd.DataFrame({'path': X_validation}), dataset, on = 'path')
+test_dataset = pd.concat([pd.merge(pd.DataFrame({'path': X_test}), dataset, on = 'path'), rest_dataset])
+
+fig = plt.figure(figsize = (17, 4))
+ax1 = fig.add_subplot(131)
+ax1.pie(sizes(train_dataset.sum()[1], train_dataset.sum()[2], train_dataset.sum()[3]),
+        explode = (0.1, 0, 0), labels = labels(train_dataset.sum()[1], train_dataset.sum()[2], train_dataset.sum()[3]),
+        autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax1.axis('equal')
+ax1.title.set_text('Train Set')
+
+ax3 = fig.add_subplot(132)
+ax3.pie(sizes(validation_dataset.sum()[1], validation_dataset.sum()[2], validation_dataset.sum()[3]),
+        explode = (0.1, 0, 0),
+        labels = labels(validation_dataset.sum()[1], validation_dataset.sum()[2], validation_dataset.sum()[3]),
+        autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax3.axis('equal')
+ax3.title.set_text('Validation Set')
+
+ax2 = fig.add_subplot(133)
+ax2.pie(sizes(test_dataset.sum()[1], test_dataset.sum()[2], test_dataset.sum()[3]),
+        explode = (0.1, 0, 0), labels = labels(test_dataset.sum()[1], test_dataset.sum()[2], test_dataset.sum()[3]),
+        autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax2.axis('equal')
+ax2.title.set_text('Test Set')
 
 plt.show()
+
+# +
+imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True, validation_split = 0.05)
+
+batch_size = 4
+x_col = 'path'
+y_col = 'target'
+classes = ['Pneumonia', 'Normal']
+mode = 'grayscale'
+target_size = (256, 256)
+
+print('Train generator:')
+train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col, classes = classes,
+                                                     seed = 0, target_size = target_size, batch_size = batch_size,
+                                                     class_mode = 'binary', color_mode = mode, subset = 'training')
+
+print('\nValidation generator:')
+validation_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, classes = classes,
+                                                          seed = 0, target_size = target_size, batch_size = batch_size,
+                                                          class_mode = 'binary', color_mode = mode,
+                                                          subset = 'validation')
+
+print('Test generator:')
+test_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, classes = classes,
+                                                    seed = 0, target_size = target_size, batch_size = batch_size,
+                                                    class_mode = 'binary', color_mode = mode)
+
 # -
