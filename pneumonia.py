@@ -28,13 +28,16 @@ from keras.models import load_model
 from keras.preprocessing.image import ImageDataGenerator
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.model_selection import train_test_split
+from keras import backend as K
+import tensorflow as tf
 
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.models import Sequential,Input,Model
 from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, Flatten, Input, LSTM, TimeDistributed
 from keras.layers.normalization import BatchNormalization
 from keras.layers.advanced_activations import LeakyReLU
-from keras.callbacks import EarlyStopping
+from keras.callbacks import EarlyStopping, Callback
+from sklearn.metrics import recall_score, roc_auc_score, f1_score, roc_curve, classification_report
 
 cv2.__version__
 
@@ -64,6 +67,29 @@ file_names_pneumonia = [path[bddl:] for path in glob.glob(base_data_dir + 'train
                                                                                                         glob.glob(
                                                                                                             '../data/chest_xray/test/PNEUMONIA/*.jpeg')] + [
                            path[bddl:] for path in glob.glob('../data/chest_xray/val/PNEUMONIA/*.jpeg')]
+
+# +
+normal_patterns = [
+    base_data_dir + 'train/NORMAL/*.jpeg',
+    base_data_dir + 'test/NORMAL/*.jpeg', 
+    base_data_dir + 'val/NORMAL/*.jpeg'
+]
+
+bacteria_patterns = [
+    base_data_dir + 'train/PNEUMONIA/*bacteria*.jpeg',
+    base_data_dir + 'test/PNEUMONIA/*bacteria*.jpeg', 
+    base_data_dir + 'val/PNEUMONIA/*bacteria*.jpeg'
+]
+
+virus_patterns = [
+    base_data_dir + 'train/PNEUMONIA/*virus*.jpeg',
+    base_data_dir + 'test/PNEUMONIA/*virus*.jpeg', 
+    base_data_dir + 'val/PNEUMONIA/*virus*.jpeg'
+]
+    
+raw_normal = [item for sublist in [glob.glob(path) for path in normal_patterns] for item in sublist]
+raw_bacteria = [item for sublist in [glob.glob(path) for path in bacteria_patterns] for item in sublist]
+raw_virus = [item for sublist in [glob.glob(path) for path in virus_patterns] for item in sublist]
 # -
 
 get_file('lung_segmentation.hdf5',
@@ -173,12 +199,20 @@ for path in tqdm_notebook(file_names_pneumonia):
         cv2.imwrite(output_path, normalized)
     i += 1
 # + {}
+# normal_df = pd.DataFrame(
+#     {'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
+# bacteria_df = pd.DataFrame(
+#     {'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
+# virus_df = pd.DataFrame(
+#     {'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
+
 normal_df = pd.DataFrame(
-    {'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
+    {'path': raw_normal, 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
 bacteria_df = pd.DataFrame(
-    {'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
+    {'path': raw_bacteria, 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
 virus_df = pd.DataFrame(
-    {'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
+    {'path': raw_virus, 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
+
 
 dataset = pd.concat([normal_df, bacteria_df, virus_df])
 dataset = dataset.sort_values('path')
@@ -190,7 +224,7 @@ pd.set_option('max_colwidth', 100)
 dataset.head(10)
 
 # +
-colors = ['#86ddf6', '#f9f0c8', '#fcde8b']
+colors = ['#D4FCEF', '#FDAFD7', '#FECBE5']
 
 
 def labels(normal_amount, bacteria_amount, virus_amount): return \
@@ -214,7 +248,7 @@ plt.show()
 
 # +
 test_size = 0.2
-validation_size = 0.006
+validation_size = 0.05
 
 sampler = RandomUnderSampler(random_state = 0)
 X_balanced, _ = sampler.fit_resample(dataset[['path']].values, dataset[['target']].values)
@@ -262,77 +296,188 @@ ax2.axis('equal')
 ax2.title.set_text('Test Set')
 
 plt.show()
+# -
+
+
 
 # +
 imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True)
+testGenerator = ImageDataGenerator(rescale = 1. / 255)
 
 batch_size = 4
 x_col = 'path'
 y_col = 'target'
 classes = ['Normal', 'Pneumonia']
 mode = 'grayscale'
-target_size = (256, 256)
+target_size = (150, 150)
 
 print('Train generator:')
-train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col, classes = classes,
+train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col, # classes = classes,
                                                      seed = 0, target_size = target_size, batch_size = batch_size,
                                                      class_mode = 'binary', color_mode = mode)
 
 print('\nValidation generator:')
-validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col, classes = classes,
+validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col, # classes = classes,
                                                           seed = 0, target_size = target_size, batch_size = 1,
                                                           class_mode = 'binary', color_mode = mode, shuffle = False)
 
 print('\nTest generator:')
-test_generator = imageGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, classes = classes,
+test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, # classes = classes,
                                                     seed = 0, target_size = target_size, batch_size = batch_size,
                                                     class_mode = 'binary', color_mode = mode)
 
 # -
 
+K.image_data_format()
+
+train_generator.image_shape
+
+# +
 model = Sequential()
-model.add(Conv2D(32,(7,7),activation='relu', input_shape = train_generator.image_shape))
+model.add(Conv2D(32,(3,3),activation='relu', input_shape = train_generator.image_shape))
 model.add(MaxPooling2D((2,2)))
 model.add(BatchNormalization())
-model.add(Dropout(0.15))
-model.add(Conv2D(64,(5,5),activation='relu'))
+model.add(Dropout(rate = 0.15))
+model.add(Conv2D(64,(3,3),activation='relu'))
 model.add(MaxPooling2D((2,2)))
 model.add(BatchNormalization())
-model.add(Dropout(0.15))
+model.add(Dropout(rate = 0.15))
 model.add(Conv2D(128,(3,3),activation='relu'))
 model.add(MaxPooling2D((2,2)))
 model.add(BatchNormalization())
-model.add(Dropout(0.15))
+model.add(Dropout(rate = 0.15))
 model.add(Conv2D(128,(3,3),activation='relu'))
 model.add(MaxPooling2D((2,2)))
-model.add(BatchNormalization())
+
+model.add(Flatten())
+model.add(Dense(64, activation='relu'))
 model.add(Dropout(0.15))
-model.add(GlobalAveragePooling2D())
-model.add(Dense(1000, activation='relu'))
+# model.add(BatchNormalization())
+# model.add(Dropout(rate = 0.15))
+# model.add(GlobalAveragePooling2D())
+# model.add(Dense(1000, activation='relu'))
 model.add(Dense(1, activation='sigmoid'))
 model.summary()
 
-# optimizer = Adam(lr = 0.0001)
-early_stopping_monitor = EarlyStopping(patience = 3, monitor = 'val_acc', mode='max', verbose = 1)
-model.compile(loss='binary_crossentropy', metrics=['accuracy'], optimizer = 'adam')
-history = model.fit_generator(epochs = 5, shuffle = True, validation_data = validation_generator,
-                              steps_per_epoch = 500, generator = train_generator, validation_steps = 3, 
-                              verbose = 1, callbacks=[early_stopping_monitor])
 
 # +
-# prediction = model.predict_generator(generator=test_generator, verbose=2, steps=100)
+# optimizer = Adam(lr = 0.0001)
+        
+def precision(y_true, y_pred):
+    '''Calculates the precision, a metric for multi-label classification of
+    how many selected items are relevant.
+    '''
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    return precision
+
+
+def recall(y_true, y_pred):
+    '''Calculates the recall, a metric for multi-label classification of
+    how many relevant items are selected.
+    '''
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+
+def fbeta_score(y_true, y_pred, beta=1):
+    '''Calculates the F score, the weighted harmonic mean of precision and recall.
+    This is useful for multi-label classification, where input samples can be
+    classified as sets of labels. By only using accuracy (precision) a model
+    would achieve a perfect score by simply assigning every class to every
+    input. In order to avoid this, a metric should penalize incorrect class
+    assignments as well (recall). The F-beta score (ranged from 0.0 to 1.0)
+    computes this, as a weighted mean of the proportion of correct class
+    assignments vs. the proportion of incorrect class assignments.
+    With beta = 1, this is equivalent to a F-measure. With beta < 1, assigning
+    correct classes becomes more important, and with beta > 1 the metric is
+    instead weighted towards penalizing incorrect class assignments.
+    '''
+    if beta < 0:
+        raise ValueError('The lowest choosable beta is zero (only precision).')
+        
+    # If there are no true positives, fix the F score at 0 like sklearn.
+    if K.sum(K.round(K.clip(y_true, 0, 1))) == 0:
+        return 0
+
+    p = precision(y_true, y_pred)
+    r = recall(y_true, y_pred)
+    bb = beta ** 2
+    fbeta_score = (1 + bb) * (p * r) / (bb * p + r + K.epsilon())
+    return fbeta_score
+
+
+def fmeasure(y_true, y_pred):
+    '''Calculates the f-measure, the harmonic mean of precision and recall.
+    '''
+    return fbeta_score(y_true, y_pred, beta=1)
+
+# def auc(y_true, y_pred):
+#     init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+#     sess.run(init)
+#     value, update_op = tf.contrib.metrics.streaming_auc(y_pred, y_true)
+#     metric_vars = [i for i in tf.local_variables() if 'auc_roc' in i.name.split('/')[1]]
+#     for v in metric_vars:
+#         tf.add_to_collection(tf.GraphKeys.GLOBAL_VARIABLES, v)
+#     with tf.control_dependencies([update_op]):
+#         value = tf.identity(value)
+#         return value
+
+model.compile(loss='binary_crossentropy', metrics=['accuracy', fmeasure], optimizer = 'rmsprop')
+history = model.fit_generator(epochs = 50, shuffle = True, validation_data = validation_generator,
+                              steps_per_epoch = 50, generator = train_generator, 
+                              validation_steps = ceil(validation_dataset.shape[0] / batch_size), 
+                              verbose = 1)
 # -
+
+scores = model.evaluate_generator(test_generator, verbose = 1, steps = test_dataset.shape[0] / batch_size)
+
+print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
+
+print(scores)
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.set_facecolor('w')
-ax.grid(b=False)
 ax.plot(history.history['acc'], color='red')
 ax.plot(history.history['val_acc'], color ='green')
-plt.title('model accuracy')
+plt.title('Accuracy')
 plt.ylabel('accuracy')
 plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='lower right')
+plt.legend(['train', 'validation'], loc='lower right')
 plt.show()
 
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.set_facecolor('w')
+ax.plot(history.history['loss'], color='red')
+ax.plot(history.history['val_loss'], color ='green')
+plt.title('Accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'validation'], loc='lower right')
+plt.show()
 
+# +
+# fig = plt.figure(figsize = (17, 3 * batch_size))
+# rows = 2
+# i = 0
+# for row_i, (a, b) in enumerate(test_generator):
+#     if row_i > rows:
+#         break
+#     for d in a:
+#         img = d[:,:,0]        
+#         ax = plt.subplot(rows + 1, batch_size, i + 1)
+#         ax.imshow(img)
+#         plt.axis('off')
+#         i += 1
+    
+# plt.show()
+# -
+
+test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0] / batch_size)
+
+print(classification_report(test_generator.classes, np.rint(test_pred)))
