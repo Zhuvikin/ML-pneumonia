@@ -32,8 +32,9 @@ from keras import backend as K
 import tensorflow as tf
 
 from keras.optimizers import Adam, SGD, RMSprop
-from keras.models import Sequential,Input,Model
-from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, Flatten, Input, LSTM, TimeDistributed
+from keras.models import Sequential, Input, Model
+from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, \
+    Flatten, Input, LSTM, TimeDistributed
 from keras.layers.normalization import BatchNormalization
 from keras.layers.advanced_activations import LeakyReLU
 from keras.callbacks import EarlyStopping, Callback
@@ -71,22 +72,22 @@ file_names_pneumonia = [path[bddl:] for path in glob.glob(base_data_dir + 'train
 # +
 normal_patterns = [
     base_data_dir + 'train/NORMAL/*.jpeg',
-    base_data_dir + 'test/NORMAL/*.jpeg', 
+    base_data_dir + 'test/NORMAL/*.jpeg',
     base_data_dir + 'val/NORMAL/*.jpeg'
 ]
 
 bacteria_patterns = [
     base_data_dir + 'train/PNEUMONIA/*bacteria*.jpeg',
-    base_data_dir + 'test/PNEUMONIA/*bacteria*.jpeg', 
+    base_data_dir + 'test/PNEUMONIA/*bacteria*.jpeg',
     base_data_dir + 'val/PNEUMONIA/*bacteria*.jpeg'
 ]
 
 virus_patterns = [
     base_data_dir + 'train/PNEUMONIA/*virus*.jpeg',
-    base_data_dir + 'test/PNEUMONIA/*virus*.jpeg', 
+    base_data_dir + 'test/PNEUMONIA/*virus*.jpeg',
     base_data_dir + 'val/PNEUMONIA/*virus*.jpeg'
 ]
-    
+
 raw_normal = [item for sublist in [glob.glob(path) for path in normal_patterns] for item in sublist]
 raw_bacteria = [item for sublist in [glob.glob(path) for path in bacteria_patterns] for item in sublist]
 raw_virus = [item for sublist in [glob.glob(path) for path in virus_patterns] for item in sublist]
@@ -199,20 +200,19 @@ for path in tqdm_notebook(file_names_pneumonia):
         cv2.imwrite(output_path, normalized)
     i += 1
 # + {}
-# normal_df = pd.DataFrame(
-#     {'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
-# bacteria_df = pd.DataFrame(
-#     {'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
-# virus_df = pd.DataFrame(
-#     {'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
-
 normal_df = pd.DataFrame(
-    {'path': raw_normal, 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
+    {'path': glob.glob(normal_dir + '*.jpeg'), 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
 bacteria_df = pd.DataFrame(
-    {'path': raw_bacteria, 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
+    {'path': glob.glob(bacteria_dir + '*.jpeg'), 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
 virus_df = pd.DataFrame(
-    {'path': raw_virus, 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
+    {'path': glob.glob(virus_dir + '*.jpeg'), 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
 
+# normal_df = pd.DataFrame(
+#     {'path': raw_normal, 'normal': 1, 'bacteria': 0, 'virus': 0, 'target': 'Normal'})
+# bacteria_df = pd.DataFrame(
+#     {'path': raw_bacteria, 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
+# virus_df = pd.DataFrame(
+#     {'path': raw_virus, 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
 
 dataset = pd.concat([normal_df, bacteria_df, virus_df])
 dataset = dataset.sort_values('path')
@@ -296,9 +296,6 @@ ax2.axis('equal')
 ax2.title.set_text('Test Set')
 
 plt.show()
-# -
-
-
 
 # +
 imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True)
@@ -312,57 +309,58 @@ mode = 'grayscale'
 target_size = (150, 150)
 
 print('Train generator:')
-train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col, # classes = classes,
+train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col,  # classes = classes,
                                                      seed = 0, target_size = target_size, batch_size = batch_size,
                                                      class_mode = 'binary', color_mode = mode)
 
 print('\nValidation generator:')
-validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col, # classes = classes,
+validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col,
+                                                          # classes = classes,
                                                           seed = 0, target_size = target_size, batch_size = 1,
                                                           class_mode = 'binary', color_mode = mode, shuffle = False)
 
 print('\nTest generator:')
-test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col, # classes = classes,
-                                                    seed = 0, target_size = target_size, batch_size = batch_size,
-                                                    class_mode = 'binary', color_mode = mode)
+test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col,  # classes = classes,
+                                                   seed = 0, target_size = target_size, batch_size = batch_size,
+                                                   class_mode = 'binary', color_mode = mode, shuffle = False)
 
 # -
 
-K.image_data_format()
+train_dataset.groupby(['target']).agg('sum')
 
 train_generator.image_shape
 
 # +
 model = Sequential()
-model.add(Conv2D(32,(3,3),activation='relu', input_shape = train_generator.image_shape))
-model.add(MaxPooling2D((2,2)))
+model.add(Conv2D(32, (3, 3), activation = 'relu', input_shape = train_generator.image_shape))
+model.add(MaxPooling2D((2, 2)))
 model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
-model.add(Conv2D(64,(3,3),activation='relu'))
-model.add(MaxPooling2D((2,2)))
+model.add(Conv2D(64, (3, 3), activation = 'relu'))
+model.add(MaxPooling2D((2, 2)))
 model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
-model.add(Conv2D(128,(3,3),activation='relu'))
-model.add(MaxPooling2D((2,2)))
+model.add(Conv2D(128, (3, 3), activation = 'relu'))
+model.add(MaxPooling2D((2, 2)))
 model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
-model.add(Conv2D(128,(3,3),activation='relu'))
-model.add(MaxPooling2D((2,2)))
+model.add(Conv2D(128, (3, 3), activation = 'relu'))
+model.add(MaxPooling2D((2, 2)))
 
 model.add(Flatten())
-model.add(Dense(64, activation='relu'))
+model.add(Dense(64, activation = 'relu'))
 model.add(Dropout(0.15))
 # model.add(BatchNormalization())
 # model.add(Dropout(rate = 0.15))
 # model.add(GlobalAveragePooling2D())
 # model.add(Dense(1000, activation='relu'))
-model.add(Dense(1, activation='sigmoid'))
+model.add(Dense(1, activation = 'sigmoid'))
 model.summary()
 
 
 # +
 # optimizer = Adam(lr = 0.0001)
-        
+
 def precision(y_true, y_pred):
     '''Calculates the precision, a metric for multi-label classification of
     how many selected items are relevant.
@@ -383,7 +381,7 @@ def recall(y_true, y_pred):
     return recall
 
 
-def fbeta_score(y_true, y_pred, beta=1):
+def fbeta_score(y_true, y_pred, beta = 1):
     '''Calculates the F score, the weighted harmonic mean of precision and recall.
     This is useful for multi-label classification, where input samples can be
     classified as sets of labels. By only using accuracy (precision) a model
@@ -398,7 +396,7 @@ def fbeta_score(y_true, y_pred, beta=1):
     '''
     if beta < 0:
         raise ValueError('The lowest choosable beta is zero (only precision).')
-        
+
     # If there are no true positives, fix the F score at 0 like sklearn.
     if K.sum(K.round(K.clip(y_true, 0, 1))) == 0:
         return 0
@@ -413,7 +411,8 @@ def fbeta_score(y_true, y_pred, beta=1):
 def fmeasure(y_true, y_pred):
     '''Calculates the f-measure, the harmonic mean of precision and recall.
     '''
-    return fbeta_score(y_true, y_pred, beta=1)
+    return fbeta_score(y_true, y_pred, beta = 1)
+
 
 # def auc(y_true, y_pred):
 #     init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -426,58 +425,15 @@ def fmeasure(y_true, y_pred):
 #         value = tf.identity(value)
 #         return value
 
-model.compile(loss='binary_crossentropy', metrics=['accuracy', fmeasure], optimizer = 'rmsprop')
+model.compile(loss = 'binary_crossentropy', metrics = ['accuracy', fmeasure], optimizer = 'rmsprop')
 history = model.fit_generator(epochs = 50, shuffle = True, validation_data = validation_generator,
-                              steps_per_epoch = 50, generator = train_generator, 
-                              validation_steps = ceil(validation_dataset.shape[0] / batch_size), 
+                              steps_per_epoch = 100, generator = train_generator,
+                              validation_steps = ceil(validation_dataset.shape[0] / batch_size),
                               verbose = 1)
-# -
-
-scores = model.evaluate_generator(test_generator, verbose = 1, steps = test_dataset.shape[0] / batch_size)
-
-print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
-
-print(scores)
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.set_facecolor('w')
-ax.plot(history.history['acc'], color='red')
-ax.plot(history.history['val_acc'], color ='green')
-plt.title('Accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.legend(['train', 'validation'], loc='lower right')
-plt.show()
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.set_facecolor('w')
-ax.plot(history.history['loss'], color='red')
-ax.plot(history.history['val_loss'], color ='green')
-plt.title('Accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.legend(['train', 'validation'], loc='lower right')
-plt.show()
-
-# +
-# fig = plt.figure(figsize = (17, 3 * batch_size))
-# rows = 2
-# i = 0
-# for row_i, (a, b) in enumerate(test_generator):
-#     if row_i > rows:
-#         break
-#     for d in a:
-#         img = d[:,:,0]        
-#         ax = plt.subplot(rows + 1, batch_size, i + 1)
-#         ax.imshow(img)
-#         plt.axis('off')
-#         i += 1
-    
-# plt.show()
 # -
 
 test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0] / batch_size)
 
-print(classification_report(test_generator.classes, np.rint(test_pred)))
+print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
+
+print(((np.array(test_generator.classes) + np.rint(test_pred).astype(int).flatten()) != 1).tolist())
