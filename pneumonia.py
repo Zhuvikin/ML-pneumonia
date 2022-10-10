@@ -59,8 +59,6 @@ for directory in [normal_dir, bacteria_dir, virus_dir, models_lungs_dir,
         os.makedirs(directory)
 
 lung_segmentation_model_path = models_lungs_dir + 'lung_segmentation.hdf5'
-best_binary_model_path = models_binary_dir + 'pneumonia.hdf5'
-best_categorical_model_path = models_categorical_dir + 'pneumonia.hdf5'
 
 # +
 normal_patterns = [
@@ -353,11 +351,14 @@ def recall(y_true, y_pred):
     return recall
 
 
-model_check_point = ModelCheckpoint(best_binary_model_path, save_best_only = True,
-                                    monitor = 'val_loss', mode = 'min')
+model_check_point = ModelCheckpoint(
+    models_binary_dir + 'pneumonia-{val_loss:.2f}-{val_acc:.2f}-{val_precision:.2f}-{val_recall:.2f}.hdf5',
+    save_best_only = True, verbose = 1, monitor = 'val_acc', mode = 'max')
 
 # +
-model.compile(loss = 'binary_crossentropy', optimizer = 'adam',
+optimizer = Adam()
+
+model.compile(loss = 'binary_crossentropy', optimizer = optimizer,
               metrics = ['accuracy', recall, precision])
 
 train_generator.reset()
@@ -383,6 +384,19 @@ for i, metric in enumerate(metrics):
     plt.legend(['train', 'validation'], loc = 'upper left')
 
 plt.show()
+
+# +
+binary_models = []
+for model_path in glob.glob(models_binary_dir + 'pneumonia-*.hdf5'):
+    name = os.path.basename(model_path)
+    (prefix, sep, suffix) = name.rpartition('.')
+    scores = list(map(lambda k: float(k), prefix.split('-')[1:]))
+    binary_models.append([model_path] + scores)
+
+binary_models = pd.DataFrame(binary_models, columns = ['path', 'loss', 'acc', 'precision', 'recall'])
+best_binary_model_path = binary_models.sort_values('acc', ascending = False).path.iloc[0]
+
+best_binary_model = load_model(best_binary_model_path, custom_objects = {'recall': recall, 'precision': precision})
 # -
 
 test_generator.reset()
@@ -405,3 +419,4 @@ for row_i, (a, b) in enumerate(train_generator):
         i += 1
 
 plt.show()
+# -
