@@ -14,10 +14,13 @@
 # ---
 
 # +
+import os
+import random
+import numpy as np
+import tensorflow as tf
+from keras import backend as K
 import cv2
 import glob
-import os
-import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from math import ceil, floor
@@ -28,19 +31,13 @@ from keras.models import load_model
 from keras.preprocessing.image import ImageDataGenerator
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.model_selection import train_test_split
-from keras import backend as K
-import tensorflow as tf
 
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.models import Sequential, Input, Model
 from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, \
     Flatten, Input, LSTM, TimeDistributed
 from keras.layers.normalization import BatchNormalization
-from keras.layers.advanced_activations import LeakyReLU
-from keras.callbacks import EarlyStopping, Callback
 from sklearn.metrics import recall_score, roc_auc_score, f1_score, roc_curve, classification_report
-
-cv2.__version__
 
 # +
 base_data_dir = '../data/chest_xray/'
@@ -248,7 +245,7 @@ plt.show()
 
 # +
 test_size = 0.2
-validation_size = 0.01 # 0.05
+validation_size = 0.02
 
 sampler = RandomUnderSampler(random_state = 0)
 X_balanced, _ = sampler.fit_resample(dataset[['path']].values, dataset[['target']].values)
@@ -315,16 +312,15 @@ train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_co
 
 print('\nValidation generator:')
 validation_generator = testGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col,
-                                                          seed = 0, target_size = target_size, batch_size = batch_size,
-                                                          class_mode = 'binary', color_mode = mode, shuffle = False)
+                                                         seed = 0, target_size = target_size, batch_size = batch_size,
+                                                         class_mode = 'binary', color_mode = mode, shuffle = False)
 
 print('\nTest generator:')
 test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col,
                                                    seed = 0, target_size = target_size, batch_size = 1,
                                                    class_mode = 'binary', color_mode = mode, shuffle = False)
+# -
 
-
-# +
 model = Sequential()
 model.add(Conv2D(32, (3, 3), activation = 'relu', input_shape = train_generator.image_shape))
 model.add(MaxPooling2D((2, 2)))
@@ -340,20 +336,14 @@ model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
 model.add(Conv2D(128, (3, 3), activation = 'relu'))
 model.add(MaxPooling2D((2, 2)))
-
 model.add(Flatten())
 model.add(Dense(64, activation = 'relu'))
 model.add(Dropout(0.15))
-# model.add(BatchNormalization())
-# model.add(Dropout(rate = 0.15))
-# model.add(GlobalAveragePooling2D())
-# model.add(Dense(1000, activation='relu'))
 model.add(Dense(1, activation = 'sigmoid'))
 model.summary()
 
-# +
-optimizer = Adam(lr = 0.0001)
 
+# +
 def precision(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
@@ -384,17 +374,21 @@ def fmeasure(y_true, y_pred):
     return fbeta_score(y_true, y_pred, beta = 1)
 
 
-model.compile(loss = 'binary_crossentropy', optimizer = optimizer,
+# +
+# optimizer = Adam(lr = 0.0001)
+
+model.compile(loss = 'binary_crossentropy', optimizer = 'adam',
               metrics = ['accuracy', fmeasure, recall, precision])
 
+train_generator.reset()
+validation_generator.reset()
 history = model.fit_generator(epochs = 50, shuffle = True, validation_data = validation_generator,
                               steps_per_epoch = 100, generator = train_generator,
                               validation_steps = validation_dataset.shape[0] * batch_size,
                               verbose = 1)
 # -
 
+test_generator.reset()
 test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
 
 print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
-
-print(((np.array(test_generator.classes) + np.rint(test_pred).astype(int).flatten()) != 1).tolist())
