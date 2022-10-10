@@ -32,13 +32,15 @@ from keras.preprocessing.image import ImageDataGenerator
 from imblearn.under_sampling import RandomUnderSampler
 from keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+import seaborn as sns
 
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.models import Sequential, Input, Model
 from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, \
     Flatten, Input, LSTM, TimeDistributed
 from keras.layers.normalization import BatchNormalization
-from sklearn.metrics import recall_score, roc_auc_score, f1_score, roc_curve, classification_report
+from sklearn.metrics import recall_score, roc_auc_score, f1_score, roc_curve, classification_report, confusion_matrix
 
 # +
 base_data_dir = '../data/chest_xray/'
@@ -212,6 +214,44 @@ dataset = dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
 
 pd.set_option('max_colwidth', 100)
 dataset.head(10)
+
+# +
+number_of_images = 1500
+n_row, n_col = 1, 6
+n_components = n_row * n_col
+
+pca = PCA(n_components = n_components, svd_solver = 'randomized', whiten = True)
+
+
+def plot_gallery(title, images, n_col = n_col, n_row = n_row, cmap = plt.cm.gray):
+    plt.figure(figsize = (2. * n_col, 2.26 * n_row))
+    plt.suptitle(title, size = 16)
+    for i, comp in enumerate(images):
+        plt.subplot(n_row, n_col, i + 1)
+        vmax = max(comp.max(), -comp.min())
+        plt.imshow(comp.reshape(256, 256), cmap = cmap,
+                   interpolation = 'nearest',
+                   vmin = -vmax, vmax = vmax)
+        plt.xticks(())
+        plt.yticks(())
+    plt.subplots_adjust(0.02, -0.1, 0.99, 0.93, 0.04, 0.)
+
+
+few_normal_images = np.array([cv2.imread(path, 0).flatten() for path in normal_df.head(number_of_images).path])
+pca.fit(few_normal_images)
+plot_gallery('First few principal components of normal lungs', pca.components_[:n_components])
+plt.show()
+
+print('One can even clearly observe bronchus system in few most significant components of normal lungs')
+
+pneumonia_df = pd.concat([bacteria_df, virus_df]).sample(frac = 1, random_state = 0).reset_index(drop = True)
+few_pneumonia_images = np.array([cv2.imread(path, 0).flatten() for path in pneumonia_df.head(number_of_images).path])
+pca.fit(few_pneumonia_images)
+plot_gallery('First few principal components of lungs with pneumonia', pca.components_[:n_components])
+plt.show()
+
+print(
+    'Pleural effusions and airspace consolidation in the different parts of the lungs with pneumonia make few first principal components a bit blurred')
 
 # +
 colors = ['#D4FCEF', '#FDAFD7', '#FECBE5']
@@ -394,7 +434,12 @@ for model_path in glob.glob(models_binary_dir + 'pneumonia-*.hdf5'):
     binary_models.append([model_path] + scores)
 
 binary_models = pd.DataFrame(binary_models, columns = ['path', 'loss', 'acc', 'precision', 'recall'])
-best_binary_model_path = binary_models.sort_values('acc', ascending = False).path.iloc[0]
+
+# sorted_models = binary_models.sort_values(['acc', 'loss'], ascending = [False, True])
+sorted_models = binary_models.sort_values(['acc', 'precision'], ascending = [False, False])
+
+best_binary_model_path = sorted_models.path.iloc[0]
+print('Best model:', best_binary_model_path)
 # -
 
 best_binary_model = load_model(best_binary_model_path, custom_objects = {
@@ -403,10 +448,35 @@ best_binary_model = load_model(best_binary_model_path, custom_objects = {
 })
 
 test_generator.reset()
-test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
+test_pred = best_binary_model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
 
 print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
 
+# +
+cm = confusion_matrix(y_true = test_generator.classes, y_pred = np.rint(test_pred).astype(int).flatten().tolist())
+ncm = cm.astype('float') / cm.sum(axis = 1)[:, np.newaxis]
 
+fig = plt.figure(figsize = (17, 7))
 
+ax = plt.subplot(1, 2, 1)
+sns.heatmap(cm, annot = True, ax = ax, fmt = 'd',
+            cmap = sns.dark_palette((30 / 256, 234 / 256, 186 / 256), input = "rgb"))
 
+ax.set_xlabel('Predicted')
+ax.set_ylabel('Actual')
+ax.set_title('Confusion Matrix')
+ax.xaxis.set_ticklabels(classes)
+ax.yaxis.set_ticklabels(classes)
+
+ax = plt.subplot(1, 2, 2)
+sns.heatmap(ncm, annot = True, ax = ax, fmt = 'f',
+            cmap = sns.dark_palette((30 / 256, 234 / 256, 186 / 256), input = "rgb"))
+
+ax.set_xlabel('Predicted')
+ax.set_ylabel('Actual')
+ax.set_title('Normalized Confusion Matrix')
+ax.xaxis.set_ticklabels(classes)
+ax.yaxis.set_ticklabels(classes)
+
+plt.show()
+# -
