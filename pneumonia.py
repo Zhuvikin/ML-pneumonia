@@ -363,7 +363,7 @@ model.compile(loss = 'binary_crossentropy', optimizer = optimizer,
 
 train_generator.reset()
 validation_generator.reset()
-history = model.fit_generator(epochs = 50, shuffle = True, validation_data = validation_generator,
+history = model.fit_generator(epochs = 100, shuffle = True, validation_data = validation_generator,
                               steps_per_epoch = 100, generator = train_generator,
                               validation_steps = validation_dataset.shape[0] * batch_size,
                               verbose = 1, callbacks = [model_check_point])
@@ -395,28 +395,18 @@ for model_path in glob.glob(models_binary_dir + 'pneumonia-*.hdf5'):
 
 binary_models = pd.DataFrame(binary_models, columns = ['path', 'loss', 'acc', 'precision', 'recall'])
 best_binary_model_path = binary_models.sort_values('acc', ascending = False).path.iloc[0]
-
-best_binary_model = load_model(best_binary_model_path, custom_objects = {'recall': recall, 'precision': precision})
 # -
+
+best_binary_model = load_model(best_binary_model_path, custom_objects = {
+    'recall': recall,
+    'precision': precision
+})
 
 test_generator.reset()
 test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
 
 print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
 
-# +
-fig = plt.figure(figsize = (17, 3 * batch_size))
-rows = 2
-i = 0
-for row_i, (a, b) in enumerate(train_generator):
-    if row_i > rows:
-        break
-    for d in a:
-        img = d[:, :, 0]
-        ax = plt.subplot(rows + 1, batch_size, i + 1)
-        ax.imshow(img)
-        plt.axis('off')
-        i += 1
 
-plt.show()
-# -
+
+
