@@ -30,6 +30,7 @@ from keras.utils.data_utils import get_file
 from keras.models import load_model
 from keras.preprocessing.image import ImageDataGenerator
 from imblearn.under_sampling import RandomUnderSampler
+from keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
 
 from keras.optimizers import Adam, SGD, RMSprop
@@ -48,23 +49,18 @@ pneumonia_dir = data_dir + 'pneumonia/'
 bacteria_dir = pneumonia_dir + 'bacteria/'
 virus_dir = pneumonia_dir + 'virus/'
 models_dir = './models/'
+models_lungs_dir = models_dir + 'lung/'
+models_binary_dir = models_dir + 'binary/'
+models_categorical_dir = models_dir + 'categorical/'
 
-for directory in [normal_dir, bacteria_dir, virus_dir, models_dir]:
+for directory in [normal_dir, bacteria_dir, virus_dir, models_lungs_dir,
+                  models_binary_dir, models_categorical_dir]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-# +
-bddl = len(base_data_dir)
-
-file_names_normal = [path[bddl:] for path in glob.glob(base_data_dir + 'train/NORMAL/*.jpeg')] + [path[bddl:] for path
-                                                                                                  in glob.glob(
-        '../data/chest_xray/test/NORMAL/*.jpeg')] + [path[bddl:] for path in
-                                                     glob.glob('../data/chest_xray/val/NORMAL/*.jpeg')]
-file_names_pneumonia = [path[bddl:] for path in glob.glob(base_data_dir + 'train/PNEUMONIA/*.jpeg')] + [path[bddl:] for
-                                                                                                        path in
-                                                                                                        glob.glob(
-                                                                                                            '../data/chest_xray/test/PNEUMONIA/*.jpeg')] + [
-                           path[bddl:] for path in glob.glob('../data/chest_xray/val/PNEUMONIA/*.jpeg')]
+lung_segmentation_model_path = models_lungs_dir + 'lung_segmentation.hdf5'
+best_binary_model_path = models_binary_dir + 'pneumonia.hdf5'
+best_categorical_model_path = models_categorical_dir + 'pneumonia.hdf5'
 
 # +
 normal_patterns = [
@@ -88,14 +84,13 @@ virus_patterns = [
 raw_normal = [item for sublist in [glob.glob(path) for path in normal_patterns] for item in sublist]
 raw_bacteria = [item for sublist in [glob.glob(path) for path in bacteria_patterns] for item in sublist]
 raw_virus = [item for sublist in [glob.glob(path) for path in virus_patterns] for item in sublist]
-# -
 
+# +
 get_file('lung_segmentation.hdf5',
          'https://raw.githubusercontent.com/imlab-uiip/lung-segmentation-2d/master/trained_model.hdf5',
          cache_dir = models_dir, cache_subdir = 'lung')
 
-model_name = models_dir + 'lung/lung_segmentation.hdf5'
-UNet = load_model(model_name)
+UNet = load_model(lung_segmentation_model_path)
 
 
 # +
@@ -177,22 +172,22 @@ def remove_small_regions(img, size):
 image_width = 256
 
 i = 0
-for path in tqdm_notebook(file_names_normal):
+for path in tqdm_notebook(raw_normal):
     output_path = normal_dir + '{0:04d}.jpeg'.format(i)
     if not os.path.exists(output_path):
-        img = cv2.imread(base_data_dir + path, 0)
+        img = cv2.imread(path, 0)
         normalized = normalize_image(img, image_width)
         cv2.imwrite(output_path, normalized)
     i += 1
 
 i = 0
-for path in tqdm_notebook(file_names_pneumonia):
+for path in tqdm_notebook(raw_bacteria + raw_virus):
     if 'bacteria' in path:
         output_path = bacteria_dir + '{0:04d}.jpeg'.format(i)
     else:
         output_path = virus_dir + '{0:04d}.jpeg'.format(i)
     if not os.path.exists(output_path):
-        img = cv2.imread(base_data_dir + path, 0)
+        img = cv2.imread(path, 0)
         normalized = normalize_image(img, image_width)
         cv2.imwrite(output_path, normalized)
     i += 1
@@ -358,37 +353,55 @@ def recall(y_true, y_pred):
     return recall
 
 
-def fbeta_score(y_true, y_pred, beta = 1):
-    if beta < 0:
-        raise ValueError('The lowest choosable beta is zero (only precision).')
-    if K.sum(K.round(K.clip(y_true, 0, 1))) == 0:
-        return 0
-    p = precision(y_true, y_pred)
-    r = recall(y_true, y_pred)
-    bb = beta ** 2
-    fbeta_score = (1 + bb) * (p * r) / (bb * p + r + K.epsilon())
-    return fbeta_score
-
-
-def fmeasure(y_true, y_pred):
-    return fbeta_score(y_true, y_pred, beta = 1)
-
+model_check_point = ModelCheckpoint(best_binary_model_path, save_best_only = True,
+                                    monitor = 'val_loss', mode = 'min')
 
 # +
-# optimizer = Adam(lr = 0.0001)
-
 model.compile(loss = 'binary_crossentropy', optimizer = 'adam',
-              metrics = ['accuracy', fmeasure, recall, precision])
+              metrics = ['accuracy', recall, precision])
 
 train_generator.reset()
 validation_generator.reset()
 history = model.fit_generator(epochs = 50, shuffle = True, validation_data = validation_generator,
                               steps_per_epoch = 100, generator = train_generator,
                               validation_steps = validation_dataset.shape[0] * batch_size,
-                              verbose = 1)
+                              verbose = 1, callbacks = [model_check_point])
+
+# +
+metrics = ['loss', 'acc', 'recall', 'precision']
+
+fig = plt.figure(figsize = (17, 12))
+for i, metric in enumerate(metrics):
+    ax = plt.subplot(2, 2, i + 1)
+    ax.set_facecolor('w')
+    ax.grid(b = False)
+    ax.plot(history.history[metric], color = '#00bf81')
+    ax.plot(history.history['val_' + metric], color = '#ff0083')
+    plt.title('model ' + metric)
+    plt.ylabel(metric)
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc = 'upper left')
+
+plt.show()
 # -
 
 test_generator.reset()
 test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
 
 print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
+
+# +
+fig = plt.figure(figsize = (17, 3 * batch_size))
+rows = 2
+i = 0
+for row_i, (a, b) in enumerate(train_generator):
+    if row_i > rows:
+        break
+    for d in a:
+        img = d[:, :, 0]
+        ax = plt.subplot(rows + 1, batch_size, i + 1)
+        ax.imshow(img)
+        plt.axis('off')
+        i += 1
+
+plt.show()
