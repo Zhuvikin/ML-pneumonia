@@ -248,7 +248,7 @@ plt.show()
 
 # +
 test_size = 0.2
-validation_size = 0.05
+validation_size = 0.01 # 0.05
 
 sampler = RandomUnderSampler(random_state = 0)
 X_balanced, _ = sampler.fit_resample(dataset[['path']].values, dataset[['target']].values)
@@ -266,7 +266,7 @@ X_train_validation, X_test, y_train_validation, _ = train_test_split(
     test_size = test_size, random_state = 0)
 X_train, X_validation, _, _ = train_test_split(
     X_train_validation, y_train_validation,
-    test_size = validation_size, random_state = 2)
+    test_size = validation_size, random_state = 3)
 
 train_dataset = pd.merge(pd.DataFrame({'path': X_train}), dataset, on = 'path')
 validation_dataset = pd.merge(pd.DataFrame({'path': X_validation}), dataset, on = 'path')
@@ -309,26 +309,20 @@ mode = 'grayscale'
 target_size = (150, 150)
 
 print('Train generator:')
-train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col,  # classes = classes,
+train_generator = imageGenerator.flow_from_dataframe(train_dataset, x_col = x_col, y_col = y_col,
                                                      seed = 0, target_size = target_size, batch_size = batch_size,
                                                      class_mode = 'binary', color_mode = mode)
 
 print('\nValidation generator:')
-validation_generator = imageGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col,
-                                                          # classes = classes,
-                                                          seed = 0, target_size = target_size, batch_size = 1,
+validation_generator = testGenerator.flow_from_dataframe(validation_dataset, x_col = x_col, y_col = y_col,
+                                                          seed = 0, target_size = target_size, batch_size = batch_size,
                                                           class_mode = 'binary', color_mode = mode, shuffle = False)
 
 print('\nTest generator:')
-test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col,  # classes = classes,
-                                                   seed = 0, target_size = target_size, batch_size = batch_size,
+test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col,
+                                                   seed = 0, target_size = target_size, batch_size = 1,
                                                    class_mode = 'binary', color_mode = mode, shuffle = False)
 
-# -
-
-train_dataset.groupby(['target']).agg('sum')
-
-train_generator.image_shape
 
 # +
 model = Sequential()
@@ -357,14 +351,10 @@ model.add(Dropout(0.15))
 model.add(Dense(1, activation = 'sigmoid'))
 model.summary()
 
-
 # +
-# optimizer = Adam(lr = 0.0001)
+optimizer = Adam(lr = 0.0001)
 
 def precision(y_true, y_pred):
-    '''Calculates the precision, a metric for multi-label classification of
-    how many selected items are relevant.
-    '''
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
     precision = true_positives / (predicted_positives + K.epsilon())
@@ -372,9 +362,6 @@ def precision(y_true, y_pred):
 
 
 def recall(y_true, y_pred):
-    '''Calculates the recall, a metric for multi-label classification of
-    how many relevant items are selected.
-    '''
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
@@ -382,25 +369,10 @@ def recall(y_true, y_pred):
 
 
 def fbeta_score(y_true, y_pred, beta = 1):
-    '''Calculates the F score, the weighted harmonic mean of precision and recall.
-    This is useful for multi-label classification, where input samples can be
-    classified as sets of labels. By only using accuracy (precision) a model
-    would achieve a perfect score by simply assigning every class to every
-    input. In order to avoid this, a metric should penalize incorrect class
-    assignments as well (recall). The F-beta score (ranged from 0.0 to 1.0)
-    computes this, as a weighted mean of the proportion of correct class
-    assignments vs. the proportion of incorrect class assignments.
-    With beta = 1, this is equivalent to a F-measure. With beta < 1, assigning
-    correct classes becomes more important, and with beta > 1 the metric is
-    instead weighted towards penalizing incorrect class assignments.
-    '''
     if beta < 0:
         raise ValueError('The lowest choosable beta is zero (only precision).')
-
-    # If there are no true positives, fix the F score at 0 like sklearn.
     if K.sum(K.round(K.clip(y_true, 0, 1))) == 0:
         return 0
-
     p = precision(y_true, y_pred)
     r = recall(y_true, y_pred)
     bb = beta ** 2
@@ -409,30 +381,19 @@ def fbeta_score(y_true, y_pred, beta = 1):
 
 
 def fmeasure(y_true, y_pred):
-    '''Calculates the f-measure, the harmonic mean of precision and recall.
-    '''
     return fbeta_score(y_true, y_pred, beta = 1)
 
 
-# def auc(y_true, y_pred):
-#     init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-#     sess.run(init)
-#     value, update_op = tf.contrib.metrics.streaming_auc(y_pred, y_true)
-#     metric_vars = [i for i in tf.local_variables() if 'auc_roc' in i.name.split('/')[1]]
-#     for v in metric_vars:
-#         tf.add_to_collection(tf.GraphKeys.GLOBAL_VARIABLES, v)
-#     with tf.control_dependencies([update_op]):
-#         value = tf.identity(value)
-#         return value
+model.compile(loss = 'binary_crossentropy', optimizer = optimizer,
+              metrics = ['accuracy', fmeasure, recall, precision])
 
-model.compile(loss = 'binary_crossentropy', metrics = ['accuracy', fmeasure], optimizer = 'rmsprop')
 history = model.fit_generator(epochs = 50, shuffle = True, validation_data = validation_generator,
                               steps_per_epoch = 100, generator = train_generator,
-                              validation_steps = ceil(validation_dataset.shape[0] / batch_size),
+                              validation_steps = validation_dataset.shape[0] * batch_size,
                               verbose = 1)
 # -
 
-test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0] / batch_size)
+test_pred = model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
 
 print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
 
