@@ -13,6 +13,18 @@
 #     name: jkernel
 # ---
 
+# # Pneumonia detection in chest X-Ray images
+
+# ## Introduction
+#
+#
+
+# The dataset consists of chest X-Rays given for patients with and without pneumonia. It is hard to detect disease by not educated person. Besides, it requires some time even for professional doctor to detect pneumonia. Thus, an automated approach would help with fast pneumonia diagnostic.
+#
+# There are two forms of pneumonia which are given in the dataset: bacterial and viral. The first task to solve is to find if patient has pneumonia at all (Binary Classification). Then the second task is to try to determine an actual form of the pneumonia if any (Multi-Class Classification.
+
+# ## Dataset overview
+
 # +
 import os
 import random
@@ -34,13 +46,19 @@ from keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 import seaborn as sns
+from sklearn.preprocessing import label_binarize
 
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.models import Sequential, Input, Model
 from keras.layers import Conv2D, MaxPooling2D, MaxPooling1D, GlobalAveragePooling2D, ZeroPadding2D, Dense, Dropout, \
     Flatten, Input, LSTM, TimeDistributed
 from keras.layers.normalization import BatchNormalization
-from sklearn.metrics import recall_score, roc_auc_score, f1_score, roc_curve, classification_report, confusion_matrix
+from sklearn.metrics import recall_score, auc, roc_auc_score, f1_score, roc_curve, classification_report, \
+    confusion_matrix
+
+# -
+
+# We define global constants where the needed directories paths are stored. Then we create the directories if some are not exist
 
 # +
 base_data_dir = '../data/chest_xray/'
@@ -61,6 +79,9 @@ for directory in [normal_dir, bacteria_dir, virus_dir, models_lungs_dir,
         os.makedirs(directory)
 
 lung_segmentation_model_path = models_lungs_dir + 'lung_segmentation.hdf5'
+# -
+
+# The initial dataset already have some separation of the test, train and validation sets. We gather images from all these directories because we will use our own split.
 
 # +
 normal_patterns = [
@@ -84,6 +105,41 @@ virus_patterns = [
 raw_normal = [item for sublist in [glob.glob(path) for path in normal_patterns] for item in sublist]
 raw_bacteria = [item for sublist in [glob.glob(path) for path in bacteria_patterns] for item in sublist]
 raw_virus = [item for sublist in [glob.glob(path) for path in virus_patterns] for item in sublist]
+# -
+
+# Plot a few examples of the normal images and images with bacterial and viral pneumonias 
+
+# +
+preview_n = 8
+preview_n_i = [0, 10, 20, 30]
+preview_b_i = [0, 10]
+preview_v_i = [0, 10]
+
+preview_paths = np.array(raw_normal)[preview_n_i].tolist() + np.array(raw_bacteria)[preview_b_i].tolist() + \
+                np.array(raw_virus)[preview_v_i].tolist()
+
+fig = plt.figure(figsize = (17, 8))
+plt.suptitle("Raw X-Ray Images", size = 22)
+for i in range(2):
+    for k in range(preview_n // 2):
+        index = i * preview_n // 2 + k
+        img = cv2.imread(preview_paths[index], 0)
+        ax = plt.subplot(2, preview_n // 2, index + 1)
+        im = plt.imshow(img, cmap = 'bone')
+        if index < preview_n // 2:
+            plt.title('Normal')
+        elif index < preview_n // 2 + preview_n // 4:
+            plt.title('Bacterial')
+        else:
+            plt.title('Viral')
+
+plt.subplots_adjust(hspace = 0.3)
+plt.show()
+# -
+
+# As far as we can see that dataset consists of images with various image sizes, some images are not symmetric and contain a lot of useless information around except for lungs.
+#
+# We need to preprocess images first in order to get rid of the useless information and to normalize images. The lung segmentation algorithm available at https://github.com/imlab-uiip/lung-segmentation-2d is used for this purpose. This is already trained UNet neural network which is for the specific purpose of lung segmentation.
 
 # +
 get_file('lung_segmentation.hdf5',
@@ -92,6 +148,10 @@ get_file('lung_segmentation.hdf5',
 
 UNet = load_model(lung_segmentation_model_path)
 
+
+# -
+
+# However, the used lung segmentation model does not recognize the correct lungs areas all the time and we use some lungs mask post-processing in order to make sure we do not crop usefull information in the images
 
 # +
 def adjust_gamma(image, gamma = 1.0):
@@ -168,6 +228,10 @@ def remove_small_regions(img, size):
     return img
 
 
+# -
+
+# Normalize dataset and save in the `prepeared` folder
+
 # +
 image_width = 256
 
@@ -205,15 +269,42 @@ virus_df = pd.DataFrame(
 #     {'path': raw_bacteria, 'normal': 0, 'bacteria': 1, 'virus': 0, 'target': 'Pneumonia'})
 # virus_df = pd.DataFrame(
 #     {'path': raw_virus, 'normal': 0, 'bacteria': 0, 'virus': 1, 'target': 'Pneumonia'})
+# -
+
+
+# Compare the previously shown raw images with the normalized versions
+
+# +
+processed_previews = np.array(list(normal_df.sort_values('path').path))[preview_n_i].tolist() + \
+                     np.array(list(bacteria_df.sort_values('path').path))[preview_b_i].tolist() + \
+                     np.array(list(virus_df.sort_values('path').path))[preview_v_i].tolist()
+fig = plt.figure(figsize = (17, 8))
+plt.suptitle("Normalized X-Ray Images", size = 22)
+for i in range(2):
+    for k in range(preview_n // 2):
+        index = i * preview_n // 2 + k
+        img = cv2.imread(processed_previews[index], 0)
+        ax = plt.subplot(2, preview_n // 2, index + 1)
+        im = plt.imshow(img, cmap = 'bone')
+        if index < preview_n // 2:
+            plt.title('Normal')
+        elif index < preview_n // 2 + preview_n // 4:
+            plt.title('Bacterial')
+        else:
+            plt.title('Viral')
+
+plt.subplots_adjust(hspace = 0.3)
+plt.show()
+# -
 
 dataset = pd.concat([normal_df, bacteria_df, virus_df])
 dataset = dataset.sort_values('path')
 dataset = dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
-# -
-
 
 pd.set_option('max_colwidth', 100)
 dataset.head(10)
+
+# Let us check if there are common features of normal images and images with pneumonia. We perform Karhunen Loeve Decomposition for the first `1500` images for both classes and plot first few principal component images
 
 # +
 number_of_images = 1500
@@ -222,6 +313,8 @@ n_components = n_row * n_col
 
 pca = PCA(n_components = n_components, svd_solver = 'randomized', whiten = True)
 
+plt.rcParams.update({'font.size': 16})
+
 
 def plot_gallery(title, images, n_col = n_col, n_row = n_row, cmap = plt.cm.gray):
     plt.figure(figsize = (2. * n_col, 2.26 * n_row))
@@ -229,7 +322,7 @@ def plot_gallery(title, images, n_col = n_col, n_row = n_row, cmap = plt.cm.gray
     for i, comp in enumerate(images):
         plt.subplot(n_row, n_col, i + 1)
         vmax = max(comp.max(), -comp.min())
-        plt.imshow(comp.reshape(256, 256), cmap = cmap,
+        plt.imshow(comp.reshape(256, 256), cmap = 'bone',
                    interpolation = 'nearest',
                    vmin = -vmax, vmax = vmax)
         plt.xticks(())
@@ -252,6 +345,9 @@ plt.show()
 
 print(
     'Pleural effusions and airspace consolidation in the different parts of the lungs with pneumonia make few first principal components a bit blurred')
+# -
+
+# Check the balance of the classes in the dataset
 
 # +
 colors = ['#D4FCEF', '#FDAFD7', '#FECBE5']
@@ -277,9 +373,13 @@ ax1.title.set_text('Data Set')
 plt.show()
 # -
 
-# ## Normal vs Pneumonia Binary Classification
+# ## 1. Normal vs Pneumonia Binary Classification
+
+# In order to perform binary classification it is better to train model with balanced data. Undersampling and split to the train, test and validation dataset are performed as follows
 
 # +
+colors = ['#D4FCEF', '#FDAFD7', '#FECBE5']
+
 test_size = 0.2
 validation_size = 0.02
 
@@ -328,7 +428,11 @@ ax2.pie(sizes(test_dataset.sum()[1], test_dataset.sum()[2], test_dataset.sum()[3
 ax2.axis('equal')
 ax2.title.set_text('Test Set')
 
+plt.subplots_adjust(wspace = 1)
 plt.show()
+# -
+
+# In order to increase an amount of the train data we use image generators with horizontal flip augmentation
 
 # +
 imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True)
@@ -393,6 +497,10 @@ model.add(Dense(1, activation = 'sigmoid'))
 model.summary()
 
 
+# -
+
+# Define custom metrics
+
 # +
 def precision(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
@@ -411,6 +519,9 @@ def recall(y_true, y_pred):
 model_check_point = ModelCheckpoint(
     models_binary_dir + 'pneumonia-{val_loss:.2f}-{val_acc:.2f}-{val_precision:.2f}-{val_recall:.2f}.hdf5',
     save_best_only = True, verbose = 1, monitor = 'val_acc', mode = 'max')
+# -
+
+# Train neural network
 
 # +
 optimizer = Adam()
@@ -424,18 +535,21 @@ history = model.fit_generator(epochs = 100, shuffle = True, validation_data = va
                               steps_per_epoch = 100, generator = train_generator,
                               validation_steps = validation_dataset.shape[0] * batch_size,
                               verbose = 1, callbacks = [model_check_point])
+# -
+
+# Plot the dependencies of loss, accuracy, recall and precision on the training epoch number
 
 # +
 metrics = ['loss', 'acc', 'recall', 'precision']
 
-fig = plt.figure(figsize = (17, 12))
+fig = plt.figure(figsize = (17, 17))
 for i, metric in enumerate(metrics):
     ax = plt.subplot(2, 2, i + 1)
     ax.set_facecolor('w')
     ax.grid(b = False)
     ax.plot(history.history[metric], color = '#00bf81')
     ax.plot(history.history['val_' + metric], color = '#ff0083')
-    plt.title('model ' + metric)
+    plt.title(metric)
     plt.ylabel(metric)
     plt.xlabel('epoch')
     plt.legend(['train', 'validation'], loc = 'upper left')
@@ -496,9 +610,27 @@ ax.xaxis.set_ticklabels(classes)
 ax.yaxis.set_ticklabels(classes)
 
 plt.show()
+
+# +
+fpr, tpr, thresholds = roc_curve(test_generator.classes, test_pred)
+
+fig = plt.figure(figsize = (10, 10))
+lw = 2
+plt.plot(fpr, tpr, color = '#ff0083',
+         lw = lw, label = 'ROC curve (area = %0.2f)' % auc(fpr, tpr))
+plt.plot([0, 1], [0, 1], color = 'black', lw = lw, linestyle = '--')
+plt.xlim([0.0, 1.005])
+plt.ylim([0.0, 1.005])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc = "lower right")
+plt.show()
 # -
 
-# ## Normal vs Bacterial Pneumonia vs Viral Pneumonia Classification
+# ## 2. Normal vs Bacterial vs Viral Classification
+
+# In order to find multi-class classification model let us rebalance dataset again to have the same portions for normal, bacterial and viral classes 
 
 # +
 test_size = 0.2
@@ -562,6 +694,7 @@ ax2.pie(sizes(test_multi_class_dataset.sum()[1], test_multi_class_dataset.sum()[
 ax2.axis('equal')
 ax2.title.set_text('Test Set')
 
+plt.subplots_adjust(wspace = 1)
 plt.show()
 
 # +
@@ -595,6 +728,9 @@ test_multi_class_generator = testGenerator.flow_from_dataframe(test_multi_class_
                                                                seed = 0, target_size = target_size, batch_size = 1,
                                                                class_mode = 'categorical', color_mode = mode,
                                                                shuffle = False, classes = multi_classes)
+# -
+
+# We will keep network architecture the same but change the last layer to have 3 neurons only 
 
 # +
 multi_class_model = Sequential()
@@ -645,24 +781,25 @@ multi_class_model.compile(loss = 'categorical_crossentropy', optimizer = multi_c
 
 train_multi_class_generator.reset()
 validation_multi_class_generator.reset()
-multi_class_history = multi_class_model.fit_generator(epochs = 100, shuffle = True, 
-                                          validation_data = validation_multi_class_generator,
-                                          steps_per_epoch = 100, 
-                                          generator = train_multi_class_generator,
-                                          validation_steps = validation_multi_class_dataset.shape[0] * batch_size,
-                                          verbose = 1, callbacks = [multi_class_model_check_point])
+multi_class_history = multi_class_model.fit_generator(epochs = 100, shuffle = True,
+                                                      validation_data = validation_multi_class_generator,
+                                                      steps_per_epoch = 100,
+                                                      generator = train_multi_class_generator,
+                                                      validation_steps = validation_multi_class_dataset.shape[
+                                                                             0] * batch_size,
+                                                      verbose = 1, callbacks = [multi_class_model_check_point])
 
 # +
 metrics = ['loss', 'acc', 'recall', 'precision']
 
-fig = plt.figure(figsize = (17, 12))
+fig = plt.figure(figsize = (17, 17))
 for i, metric in enumerate(metrics):
     ax = plt.subplot(2, 2, i + 1)
     ax.set_facecolor('w')
     ax.grid(b = False)
     ax.plot(multi_class_history.history[metric], color = '#00bf81')
     ax.plot(multi_class_history.history['val_' + metric], color = '#ff0083')
-    plt.title('model ' + metric)
+    plt.title(metric)
     plt.ylabel(metric)
     plt.xlabel('epoch')
     plt.legend(['train', 'validation'], loc = 'upper left')
@@ -692,12 +829,72 @@ best_categorical_model = load_model(best_categorical_model_path, custom_objects 
 })
 
 test_multi_class_generator.reset()
-test_multi_class_pred = best_categorical_model.predict_generator(test_multi_class_generator, verbose = 1, steps = test_multi_class_dataset.shape[0])
+test_multi_class_pred = best_categorical_model.predict_generator(test_multi_class_generator, verbose = 1,
+                                                                 steps = test_multi_class_dataset.shape[0])
 
-print(test_multi_class_generator.classes[:100])
+class_labels = ['Bacterial', 'Normal', 'Viral']
+print(classification_report(test_multi_class_generator.classes, np.argmax(test_multi_class_pred, axis = 1),
+                            target_names = class_labels))
 
-print(np.argmax(test_multi_class_pred, axis = 1).tolist()[:100])
+# +
+cm_multi_class = confusion_matrix(y_true = test_multi_class_generator.classes,
+                                  y_pred = np.argmax(test_multi_class_pred, axis = 1))
+ncm_multi_class = cm_multi_class.astype('float') / cm_multi_class.sum(axis = 1)[:, np.newaxis]
 
-print(classification_report(test_multi_class_generator.classes, np.argmax(test_multi_class_pred, axis = 1), target_names=multi_classes))
+fig = plt.figure(figsize = (17, 7))
 
+ax = plt.subplot(1, 2, 1)
+sns.heatmap(cm_multi_class, annot = True, annot_kws = {"size": 20}, ax = ax, fmt = 'd',
+            cmap = sns.dark_palette((30 / 256, 234 / 256, 186 / 256), input = "rgb"))
 
+ax.set_xlabel('Predicted')
+ax.set_ylabel('Actual')
+ax.set_title('Confusion Matrix')
+ax.xaxis.set_ticklabels(class_labels)
+ax.yaxis.set_ticklabels(class_labels)
+
+ax = plt.subplot(1, 2, 2)
+sns.heatmap(ncm_multi_class, annot = True, annot_kws = {"size": 20}, ax = ax, fmt = 'f',
+            cmap = sns.dark_palette((30 / 256, 234 / 256, 186 / 256), input = "rgb"))
+
+ax.set_xlabel('Predicted')
+ax.set_ylabel('Actual')
+ax.set_title('Normalized Confusion Matrix')
+ax.xaxis.set_ticklabels(class_labels)
+ax.yaxis.set_ticklabels(class_labels)
+
+plt.show()
+
+# +
+mc_pred = test_multi_class_pred
+mc_true = label_binarize(test_multi_class_generator.classes, classes = [0, 1, 2])
+
+fpr = dict()
+tpr = dict()
+roc_auc = dict()
+for i in range(len(multi_classes)):
+    fpr[i], tpr[i], _ = roc_curve(mc_true[:, i], mc_pred[:, i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
+
+fig = plt.figure(figsize = (10, 10))
+lw = 2
+
+colors = ['#ff0083', '#00d791', '#ff7ec0']
+
+for i in range(len(multi_classes)):
+    plt.plot(fpr[i], tpr[i], color = colors[i],
+             lw = lw, label = class_labels[i] + ' - ROC curve (area = %0.2f)' % roc_auc[i])
+
+plt.plot([0, 1], [0, 1], color = 'black', lw = lw, linestyle = '--')
+plt.xlim([0.0, 1.005])
+plt.ylim([0.0, 1.005])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc = "lower right")
+plt.show()
+# -
+
+# ## Conclusion
+#
+# We studied the two approaches of chest X-ray images classification. The former tries to find the fact of disease only which belongs to the binary classification problems class. In addidion, the latter tries to distinguish between the two forms of pneumonia: bacterial and viral. While the fact of disease is concluded with acceptable probabiliy, the specific form is the more difficult task for the considered network. An algorithm has more mistakes while deal with viral form.
