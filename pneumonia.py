@@ -275,6 +275,9 @@ ax1.pie(sizes(normal_df.shape[0], bacteria_df.shape[0], virus_df.shape[0]),
 ax1.axis('equal')
 ax1.title.set_text('Data Set')
 plt.show()
+# -
+
+# ## Normal vs Pneumonia Binary Classification
 
 # +
 test_size = 0.2
@@ -352,27 +355,41 @@ print('\nTest generator:')
 test_generator = testGenerator.flow_from_dataframe(test_dataset, x_col = x_col, y_col = y_col,
                                                    seed = 0, target_size = target_size, batch_size = 1,
                                                    class_mode = 'binary', color_mode = mode, shuffle = False)
-# -
 
+# +
 model = Sequential()
+
 model.add(Conv2D(32, (3, 3), activation = 'relu', input_shape = train_generator.image_shape))
 model.add(MaxPooling2D((2, 2)))
 model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
+
 model.add(Conv2D(64, (3, 3), activation = 'relu'))
 model.add(MaxPooling2D((2, 2)))
 model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
+
 model.add(Conv2D(128, (3, 3), activation = 'relu'))
 model.add(MaxPooling2D((2, 2)))
 model.add(BatchNormalization())
 model.add(Dropout(rate = 0.15))
+
 model.add(Conv2D(128, (3, 3), activation = 'relu'))
 model.add(MaxPooling2D((2, 2)))
-model.add(Flatten())
+model.add(BatchNormalization())
+model.add(Dropout(rate = 0.15))
+
+model.add(Conv2D(128, (3, 3), activation = 'relu'))
+model.add(MaxPooling2D((2, 2)))
+
+model.add(GlobalAveragePooling2D())
 model.add(Dense(64, activation = 'relu'))
 model.add(Dropout(0.15))
+
+model.add(Dense(128, activation = 'relu'))
+model.add(Dropout(0.15))
 model.add(Dense(1, activation = 'sigmoid'))
+
 model.summary()
 
 
@@ -439,7 +456,7 @@ binary_models = pd.DataFrame(binary_models, columns = ['path', 'loss', 'acc', 'p
 sorted_models = binary_models.sort_values(['acc', 'precision'], ascending = [False, False])
 
 best_binary_model_path = sorted_models.path.iloc[0]
-print('Best model:', best_binary_model_path)
+print('Best binary model:', best_binary_model_path)
 # -
 
 best_binary_model = load_model(best_binary_model_path, custom_objects = {
@@ -450,7 +467,7 @@ best_binary_model = load_model(best_binary_model_path, custom_objects = {
 test_generator.reset()
 test_pred = best_binary_model.predict_generator(test_generator, verbose = 1, steps = test_dataset.shape[0])
 
-print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten().tolist()))
+print(classification_report(test_generator.classes, np.rint(test_pred).astype(int).flatten(), target_names = classes))
 
 # +
 cm = confusion_matrix(y_true = test_generator.classes, y_pred = np.rint(test_pred).astype(int).flatten().tolist())
@@ -459,7 +476,7 @@ ncm = cm.astype('float') / cm.sum(axis = 1)[:, np.newaxis]
 fig = plt.figure(figsize = (17, 7))
 
 ax = plt.subplot(1, 2, 1)
-sns.heatmap(cm, annot = True, ax = ax, fmt = 'd',
+sns.heatmap(cm, annot = True, annot_kws = {"size": 20}, ax = ax, fmt = 'd',
             cmap = sns.dark_palette((30 / 256, 234 / 256, 186 / 256), input = "rgb"))
 
 ax.set_xlabel('Predicted')
@@ -469,7 +486,7 @@ ax.xaxis.set_ticklabels(classes)
 ax.yaxis.set_ticklabels(classes)
 
 ax = plt.subplot(1, 2, 2)
-sns.heatmap(ncm, annot = True, ax = ax, fmt = 'f',
+sns.heatmap(ncm, annot = True, annot_kws = {"size": 20}, ax = ax, fmt = 'f',
             cmap = sns.dark_palette((30 / 256, 234 / 256, 186 / 256), input = "rgb"))
 
 ax.set_xlabel('Predicted')
@@ -480,3 +497,207 @@ ax.yaxis.set_ticklabels(classes)
 
 plt.show()
 # -
+
+# ## Normal vs Bacterial Pneumonia vs Viral Pneumonia Classification
+
+# +
+test_size = 0.2
+validation_size = 0.02
+
+multi_class_dataset = dataset.copy()
+multi_class_dataset['target'] = multi_class_dataset.apply(
+    lambda row: 'Normal' if row['normal'] == 1 else 'Bacterial' if row['bacteria'] == 1 else 'Viral', axis = 1)
+
+sampler = RandomUnderSampler(random_state = 0)
+X_balanced, _ = sampler.fit_resample(multi_class_dataset[['path']].values, multi_class_dataset[['target']].values)
+
+balanced_multi_class_dataset = pd.DataFrame({'path': X_balanced[:, 0]})
+balanced_multi_class_dataset = balanced_multi_class_dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
+balanced_multi_class_dataset = pd.merge(balanced_multi_class_dataset, multi_class_dataset, on = 'path')
+
+rest_multi_class_dataset = pd.DataFrame(
+    {'path': list(
+        set(X_balanced[:, 0].tolist()).symmetric_difference(multi_class_dataset[['path']].values[:, 0].tolist()))})
+rest_multi_class_dataset = rest_multi_class_dataset.sample(frac = 1, random_state = 0).reset_index(drop = True)
+rest_multi_class_dataset = pd.merge(rest_multi_class_dataset, multi_class_dataset, on = 'path')
+
+X_train_validation, X_test, y_train_validation, _ = train_test_split(
+    balanced_multi_class_dataset.path.values, balanced_multi_class_dataset.target.values,
+    test_size = test_size, random_state = 3)
+
+X_train, X_validation, _, _ = train_test_split(
+    X_train_validation, y_train_validation,
+    test_size = validation_size, random_state = 2)
+
+train_multi_class_dataset = pd.merge(pd.DataFrame({'path': X_train}), multi_class_dataset, on = 'path')
+validation_multi_class_dataset = pd.merge(pd.DataFrame({'path': X_validation}), multi_class_dataset, on = 'path')
+test_multi_class_dataset = pd.concat(
+    [pd.merge(pd.DataFrame({'path': X_test}), multi_class_dataset, on = 'path'), rest_multi_class_dataset])
+
+fig = plt.figure(figsize = (17, 4))
+ax1 = fig.add_subplot(131)
+ax1.pie(
+    sizes(train_multi_class_dataset.sum()[1], train_multi_class_dataset.sum()[2], train_multi_class_dataset.sum()[3]),
+    explode = (0.1, 0, 0), labels = labels(train_multi_class_dataset.sum()[1], train_multi_class_dataset.sum()[2],
+                                           train_multi_class_dataset.sum()[3]),
+    autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax1.axis('equal')
+ax1.title.set_text('Train Set')
+
+ax3 = fig.add_subplot(132)
+ax3.pie(sizes(validation_multi_class_dataset.sum()[1], validation_multi_class_dataset.sum()[2],
+              validation_multi_class_dataset.sum()[3]),
+        explode = (0.1, 0, 0),
+        labels = labels(validation_multi_class_dataset.sum()[1], validation_multi_class_dataset.sum()[2],
+                        validation_multi_class_dataset.sum()[3]),
+        autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax3.axis('equal')
+ax3.title.set_text('Validation Set')
+
+ax2 = fig.add_subplot(133)
+ax2.pie(sizes(test_multi_class_dataset.sum()[1], test_multi_class_dataset.sum()[2], test_multi_class_dataset.sum()[3]),
+        explode = (0.1, 0, 0), labels = labels(test_multi_class_dataset.sum()[1], test_multi_class_dataset.sum()[2],
+                                               test_multi_class_dataset.sum()[3]),
+        autopct = '%1.1f%%', startangle = 90, colors = colors)
+ax2.axis('equal')
+ax2.title.set_text('Test Set')
+
+plt.show()
+
+# +
+imageGenerator = ImageDataGenerator(rescale = 1. / 255, horizontal_flip = True)
+testGenerator = ImageDataGenerator(rescale = 1. / 255)
+
+batch_size = 4
+x_col = 'path'
+y_col = 'target'
+multi_classes = ['Normal', 'Bacterial', 'Viral']
+mode = 'grayscale'
+target_size = (150, 150)
+
+print('Train generator:')
+train_multi_class_generator = imageGenerator.flow_from_dataframe(train_multi_class_dataset, x_col = x_col,
+                                                                 y_col = y_col, classes = multi_classes,
+                                                                 seed = 0, target_size = target_size,
+                                                                 batch_size = batch_size,
+                                                                 class_mode = 'categorical', color_mode = mode)
+
+print('\nValidation generator:')
+validation_multi_class_generator = testGenerator.flow_from_dataframe(validation_multi_class_dataset, x_col = x_col,
+                                                                     y_col = y_col, classes = multi_classes,
+                                                                     seed = 0, target_size = target_size,
+                                                                     batch_size = batch_size,
+                                                                     class_mode = 'categorical', color_mode = mode,
+                                                                     shuffle = False)
+
+print('\nTest generator:')
+test_multi_class_generator = testGenerator.flow_from_dataframe(test_multi_class_dataset, x_col = x_col, y_col = y_col,
+                                                               seed = 0, target_size = target_size, batch_size = 1,
+                                                               class_mode = 'categorical', color_mode = mode,
+                                                               shuffle = False, classes = multi_classes)
+
+# +
+multi_class_model = Sequential()
+
+multi_class_model.add(Conv2D(32, (3, 3), activation = 'relu', input_shape = train_generator.image_shape))
+multi_class_model.add(MaxPooling2D((2, 2)))
+multi_class_model.add(BatchNormalization())
+multi_class_model.add(Dropout(rate = 0.15))
+
+multi_class_model.add(Conv2D(64, (3, 3), activation = 'relu'))
+multi_class_model.add(MaxPooling2D((2, 2)))
+multi_class_model.add(BatchNormalization())
+multi_class_model.add(Dropout(rate = 0.15))
+
+multi_class_model.add(Conv2D(128, (3, 3), activation = 'relu'))
+multi_class_model.add(MaxPooling2D((2, 2)))
+multi_class_model.add(BatchNormalization())
+multi_class_model.add(Dropout(rate = 0.15))
+
+multi_class_model.add(Conv2D(128, (3, 3), activation = 'relu'))
+multi_class_model.add(MaxPooling2D((2, 2)))
+multi_class_model.add(BatchNormalization())
+multi_class_model.add(Dropout(rate = 0.15))
+
+multi_class_model.add(Conv2D(128, (3, 3), activation = 'relu'))
+multi_class_model.add(MaxPooling2D((2, 2)))
+
+multi_class_model.add(GlobalAveragePooling2D())
+multi_class_model.add(Dense(64, activation = 'relu'))
+multi_class_model.add(Dropout(0.15))
+
+multi_class_model.add(Dense(128, activation = 'relu'))
+multi_class_model.add(Dropout(0.15))
+multi_class_model.add(Dense(len(multi_classes), activation = 'softmax'))
+
+multi_class_model.summary()
+# -
+
+multi_class_model_check_point = ModelCheckpoint(
+    models_categorical_dir + 'pneumonia-{val_loss:.2f}-{val_acc:.2f}-{val_precision:.2f}-{val_recall:.2f}.hdf5',
+    save_best_only = True, verbose = 1, monitor = 'val_acc', mode = 'max')
+
+# +
+multi_class_optimizer = Adam()
+
+multi_class_model.compile(loss = 'categorical_crossentropy', optimizer = multi_class_optimizer,
+                          metrics = ['accuracy', recall, precision])
+
+train_multi_class_generator.reset()
+validation_multi_class_generator.reset()
+multi_class_history = multi_class_model.fit_generator(epochs = 100, shuffle = True, 
+                                          validation_data = validation_multi_class_generator,
+                                          steps_per_epoch = 100, 
+                                          generator = train_multi_class_generator,
+                                          validation_steps = validation_multi_class_dataset.shape[0] * batch_size,
+                                          verbose = 1, callbacks = [multi_class_model_check_point])
+
+# +
+metrics = ['loss', 'acc', 'recall', 'precision']
+
+fig = plt.figure(figsize = (17, 12))
+for i, metric in enumerate(metrics):
+    ax = plt.subplot(2, 2, i + 1)
+    ax.set_facecolor('w')
+    ax.grid(b = False)
+    ax.plot(multi_class_history.history[metric], color = '#00bf81')
+    ax.plot(multi_class_history.history['val_' + metric], color = '#ff0083')
+    plt.title('model ' + metric)
+    plt.ylabel(metric)
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc = 'upper left')
+
+plt.show()
+
+# +
+categorical_models = []
+for model_path in glob.glob(models_categorical_dir + 'pneumonia-*.hdf5'):
+    name = os.path.basename(model_path)
+    (prefix, sep, suffix) = name.rpartition('.')
+    scores = list(map(lambda k: float(k), prefix.split('-')[1:]))
+    categorical_models.append([model_path] + scores)
+
+categorical_models = pd.DataFrame(categorical_models, columns = ['path', 'loss', 'acc', 'precision', 'recall'])
+
+# sorted_models = categorical_models.sort_values(['acc', 'loss'], ascending = [False, True])
+sorted_models = categorical_models.sort_values(['acc', 'precision'], ascending = [False, False])
+
+best_categorical_model_path = sorted_models.path.iloc[0]
+print('Best categorical model:', best_categorical_model_path)
+# -
+
+best_categorical_model = load_model(best_categorical_model_path, custom_objects = {
+    'recall': recall,
+    'precision': precision
+})
+
+test_multi_class_generator.reset()
+test_multi_class_pred = best_categorical_model.predict_generator(test_multi_class_generator, verbose = 1, steps = test_multi_class_dataset.shape[0])
+
+print(test_multi_class_generator.classes[:100])
+
+print(np.argmax(test_multi_class_pred, axis = 1).tolist()[:100])
+
+print(classification_report(test_multi_class_generator.classes, np.argmax(test_multi_class_pred, axis = 1), target_names=multi_classes))
+
+
